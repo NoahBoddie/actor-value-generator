@@ -1,6 +1,8 @@
 #pragma once
 
 #include "ExtraValueInfo.h"
+#include "ExtraValueStorage.h"
+#include "Utility.h"
 #include "xbyak/xbyak.h"
 
 namespace AVG
@@ -31,15 +33,12 @@ namespace AVG
 					mov(rax, ret_addr);
 					jmp(rax);
 				}
-			} code{ return_addr };
-			auto size = code.getSize();
+			} static code{ return_addr };
+			
 			auto& trampoline = SKSE::GetTrampoline();
 
-			auto result = trampoline.allocate(size);
-			std::memcpy(result, code.getCode(), size);
+			func = (uintptr_t)code.getCode();
 
-			//This is pretty dirty atm, I think it may allocate too much.
-			func = (uintptr_t)result;
 			trampoline.write_branch<5>(hook_addr, thunk);
 			//*/
 		}
@@ -56,10 +55,13 @@ namespace AVG
 				logger::info("catcher {} and av {}", catcher, raw_value);
 			}
 
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(raw_value);
 
-			if (raw_value == 256) 
+
+			if (info) //raw_value == 256
 			{
-				auto value = Psuedo::GetExtraValue(target, "HitsTaken");
+				auto value = info->GetExtraValue(target, ExtraValueInput::All);
+				//auto value = Psuedo::GetExtraValue(target, "HitsTaken");
 				logger::info("hit get {}, VALUE: {}", raw_value, value);
 				return value;
 				
@@ -97,15 +99,12 @@ namespace AVG
 					mov(rax, ret_addr);
 					jmp(rax);
 				}
-			} code{ return_addr };
-			auto size = code.getSize();
+			} static code{ return_addr };
+			
 			auto& trampoline = SKSE::GetTrampoline();
 
-			auto result = trampoline.allocate(size);
-			std::memcpy(result, code.getCode(), size);
+			func = (uintptr_t)code.getCode();
 
-			//This is pretty dirty atm, I think it may allocate too much.
-			func = (uintptr_t)result;
 			trampoline.write_branch<5>(hook_addr, thunk);
 			//*/
 		}
@@ -116,9 +115,12 @@ namespace AVG
 
 			uint32_t raw_value = std::bit_cast<uint32_t>(av);
 
-			if (raw_value == 256) {
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(raw_value);
+
+			if (info){//raw_value == 256) {
 				logger::info("hit set {}", raw_value);
-				Psuedo::SetExtraValue(target, "HitsTaken", value);
+				info->SetExtraValue(target, value, RE::ACTOR_VALUE_MODIFIER::kTotal);
+				//Psuedo::SetExtraValue(target, "HitsTaken", value);
 			} else {
 				//logger::info("pass set {}", raw_value);
 				return func(a_this, av, value);
@@ -150,15 +152,12 @@ namespace AVG
 					mov(rax, ret_addr);
 					jmp(rax);
 				}
-			} code{ return_addr };
-			auto size = code.getSize();
-			auto& trampoline = SKSE::GetTrampoline();
+			} static code{ return_addr };
 			
-			auto result = trampoline.allocate(size);
-			std::memcpy(result, code.getCode(), size);
+			auto& trampoline = SKSE::GetTrampoline();
 
-			//This is pretty dirty atm, I think it may allocate too much.
-			func = (uintptr_t)result;
+			func = (uintptr_t)code.getCode();
+
 			trampoline.write_branch<5>(hook_addr, thunk);
 			//*/
 		}
@@ -167,9 +166,12 @@ namespace AVG
 		{
 			uint32_t raw_value = std::bit_cast<uint32_t>(a3);
 
-			if (raw_value == 256) {
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(raw_value);
+
+			if (info) {  //raw_value == 256) {
 				logger::info("hit mod {}, {}, val {}, who {}", raw_value, (int32_t)a2, a4, !actor ? "none" : actor->GetName());
-				Psuedo::ModExtraValue(a_this, "HitsTaken", a4, a2);
+				info->ModExtraValue(a_this, a4, a2);
+				//Psuedo::ModExtraValue(a_this, "HitsTaken", a4, a2);
 			} else {
 				//logger::info("pass mod {}, {}, val {}, who {}", raw_value, (int32_t)a2, a4, !actor ? "none" : actor->GetName());
 				return func(a_this, a2, a3, a4, actor);
@@ -201,15 +203,12 @@ namespace AVG
 					mov(rax, ret_addr);
 					jmp(rax);
 				}
-			} code{ return_addr };
-			auto size = code.getSize();
+			} static code{ return_addr };
+			
 			auto& trampoline = SKSE::GetTrampoline();
 
-			auto result = trampoline.allocate(size);
-			std::memcpy(result, code.getCode(), size);
+			func = (uintptr_t)code.getCode();
 
-			//This is pretty dirty atm, I think it may allocate too much.
-			func = (uintptr_t)result;
 			trampoline.write_branch<5>(hook_addr, thunk);
 			//*/
 		}
@@ -220,13 +219,17 @@ namespace AVG
 
 			uint32_t raw_value = std::bit_cast<uint32_t>(a2);
 
-			if (raw_value == 256) {
-				auto value = Psuedo::GetExtraValue(target, "HitsTaken", ExtraValueInput::Base);
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(raw_value);
+
+			if (info) {  //raw_value == 256) {
+				auto value = info->GetExtraValue(target, ExtraValueInput::Base);
+				//auto value = Psuedo::GetExtraValue(target, "HitsTaken", ExtraValueInput::Base);
 				logger::info("hit base {}, val {}", raw_value, value);
 
 				return value;
-			} else {
-				//logger::info("pass mod {}, {}, val {}, who {}", raw_value, (int32_t)a2, a4, !actor ? "none" : actor->GetName());
+			} 
+			else 
+			{
 				auto value = func(a_this, a2);
 				//logger::info("pass base {}, val {}", raw_value, value);
 				
@@ -259,15 +262,12 @@ namespace AVG
 					mov(rax, ret_addr);
 					jmp(rax);
 				}
-			} code{ return_addr };
-			auto size = code.getSize();
+			} static code{ return_addr };
+			
 			auto& trampoline = SKSE::GetTrampoline();
 
-			auto result = trampoline.allocate(size);
-			std::memcpy(result, code.getCode(), size);
+			func = (uintptr_t)code.getCode();
 
-			//This is pretty dirty atm, I think it may allocate too much.
-			func = (uintptr_t)result;
 			trampoline.write_branch<5>(hook_addr, thunk);
 			//*/
 		}
@@ -276,13 +276,17 @@ namespace AVG
 		{
 			uint32_t raw_value = std::bit_cast<uint32_t>(a3);
 
-			if (raw_value == 256) {
-				auto value = Psuedo::GetExtraValue(a_this, "HitsTaken", a2);
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(raw_value);
+
+			if (info) {  //raw_value == 256) {
+				//auto value = Psuedo::GetExtraValue(a_this, "HitsTaken", a2);
+				auto value = info->GetExtraValue(a_this, a2);
 				logger::info("hit mdfr {}, modifier {}, val {}", raw_value, a2, value);
 
 				return value;
-			} else {
-				//logger::info("pass mod {}, {}, val {}, who {}", raw_value, (int32_t)a2, a4, !actor ? "none" : actor->GetName());
+			} 
+			else 
+			{
 				//return func(a_this, a2, a3);
 				auto value = func(a_this, a2, a3);
 				//logger::info("pass mdfr {}, modifier {}, val {}", raw_value, a2, value);
@@ -313,16 +317,12 @@ namespace AVG
 					mov(rax, ret_addr);
 					jmp(rax);
 				}
-			} code{ return_addr };
-			auto size = code.getSize();
+			} static code{ return_addr };
+		
 			auto& trampoline = SKSE::GetTrampoline();
 
-			auto result = trampoline.allocate(size);
-			std::memcpy(result, code.getCode(), size);
+			func = (uintptr_t)code.getCode();
 
-			//This is pretty dirty atm, I think it may allocate too much.
-			func = (uintptr_t)result;
-			
 			trampoline.write_branch<5>(hook_addr, thunk);
 			
 			//*/
@@ -339,11 +339,14 @@ namespace AVG
 				char& letter = av_name
 			}
 			//*/
-			int result = std::strcmp(av_name, "HitsTaken");
 
-			if (result == 0) {
-				logger::info("HitsTaken Queried");
-				return static_cast<RE::ActorValue>(256);  //The only one for now.
+			
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByName(av_name);
+
+			if (info) {//Utility::StrCmpI(av_name, "HitsTaken") == true) {
+				ValueID id = info->GetValueID();
+				logger::info("EV Queried at  {}", id);
+				return static_cast<RE::ActorValue>(id);
 			}
 			else {
 				return func(av_name);
@@ -351,6 +354,137 @@ namespace AVG
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	struct temp_MainUpdateHook
+	{
+		//I hate this method of putting stuff on the main thread like this
+		static void Patch()
+		{
+			auto& trampoline = SKSE::GetTrampoline();
+			
+			REL::Relocation<uintptr_t> mainHook{ REL::ID(35551) };  // 5AF3D0, courtesy of TDM from Ersh
+
+			func = trampoline.write_call<5>(mainHook.address() + 0x11F, thunk);
+			
+		}
+
+
+
+		static void thunk(RE::Main* a_this, float a2)
+		{
+			//I'm just going to call this shit fucked for now and call it a day.
+			func(a_this, a2);
+			
+			auto a_ui = RE::UI::GetSingleton();
+
+
+			if (!a_ui || a_ui->numPausesGame || a_this->freezeTime || !a_this->gameActive) {
+				return;
+			}
+			
+			a2 = Utility::GetDeltaTime();
+
+			static bool first = false;
+
+			if (!first) {
+				logger::info("{}", a2);
+				first = true;
+			}
+			auto* player = RE::PlayerCharacter::GetSingleton();
+
+			if (temp_player_delay > 0) {
+
+				float remainder = a2 - temp_player_delay;
+				temp_player_delay -= a2;
+				a2 = fmax(remainder, 0);
+
+				if (a2 > 0) {
+					logger::info("player is regenerating hits taken");
+				}
+			}
+			
+			if (a2 > 0) 
+			{
+				float mod_value = 5 * a2;
+				Psuedo::ModExtraValue(player, "HitsTaken", mod_value, RE::ACTOR_VALUE_MODIFIER::kDamage);
+			}
+			
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+	
+	struct ActorUpdateHook
+	{
+		//I hate this method of putting stuff on the main thread like this
+		static void Patch()
+		{
+			REL::Relocation<uintptr_t> Character__Actor_VTable{ RE::VTABLE_Character[0] };
+			REL::Relocation<uintptr_t> PlayerCharacter__Actor_VTable{ RE::VTABLE_PlayerCharacter[0] };
+
+			func[0] = Character__Actor_VTable.write_vfunc(0xAD, thunk<0>);
+			func[1] = PlayerCharacter__Actor_VTable.write_vfunc(0xAD, thunk<1>);
+		}
+		//The main purpose of this function shouldn't be to to update directly, I was thinking it should be to update states primarily?
+		template <unsigned int I = 0>
+		static void thunk(RE::Character* a_this, float a2)
+		{
+			func[I](a_this, a2);
+			
+			if (a2 == 0)
+				a2 = Utility::GetDeltaTime();
+
+			//A question remains if I would like to handle this by recording the last time it was updated, instead of just respecting
+			// delta times alone. I'll decide later.
+
+			//Note, this is not how this shit would be going down.
+			
+			//This would never create, if it doesn't exist, no damage can exist.
+			ExtraValueStorage* value_storage = ExtraValueStorage::GetStorage(a_this);
+
+			if (!value_storage || value_storage->GetValue(0, ExtraValueInput::Damage) >= 0) {
+				//if (a_this->IsPlayerRef())
+				//	logger::info("A {}", value_storage != nullptr);
+				
+				return;
+			}
+			//reduce using this
+			float remainder = a2 - value_storage->_recoveryData[0].second;
+
+			if (remainder <= 0) {
+				value_storage->_recoveryData[0].second -= a2;
+
+				//if (a_this->IsPlayerRef())
+				//	logger::info("B {}", remainder);
+
+				return;
+			}
+
+			value_storage->_recoveryData[0].second = 0;
+
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByData(0);
+
+			if (!info)
+				return;
+
+			RecoveryData* rec_data = info->GetRecoveryData();
+
+			if (!rec_data)
+				return;
+
+
+			float mod_value = rec_data->tmp_recRate *  remainder;
+
+			//if (a_this->IsPlayerRef())
+			//	logger::info("C {}", remainder);
+
+			Psuedo::ModExtraValue(a_this, "HitsTaken", mod_value, RE::ACTOR_VALUE_MODIFIER::kDamage);
+						
+		}
+
+		static inline REL::Relocation<decltype(thunk<0>)> func[2];
 	};
 
 
@@ -361,6 +495,7 @@ namespace AVG
 			//Simple safe measure, I don't need the space atm though.
 			SKSE::AllocTrampoline(256);
 
+
 			//Remember to allocate the trampoline smile.
 
 			//Here's a thought, instead of patching this shit manually, what would happen if I say, just pluck the function from it's
@@ -369,9 +504,11 @@ namespace AVG
 			// 
 			//REL::Relocation<uintptr_t> Character__ActorValueOwner_VTable{ RE::VTABLE_Character[6] };
 
+			//temp_MainUpdateHook::Patch();
+			ActorUpdateHook::Patch();
+
 			GetActorValueHook::Patch();
 			SetActorValueHook::Patch();
-			//ValueModifierEffFunc32Hook::Patch();
 			ModActorValueHook::Patch();
 			GetBaseActorValueHook::Patch();
 			GetActorValueModifierHook::Patch();

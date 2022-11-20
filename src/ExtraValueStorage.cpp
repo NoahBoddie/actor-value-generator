@@ -17,6 +17,10 @@ namespace AVG
 			return;  //print error, probbably crash
 		}
 		_valueData = decltype(_valueData)(size, ExtraValueData());
+		
+		_recoveryData = ExtraValueInfo::GetRecoverableValues();
+
+
 
 		if (is_deserializing)
 			return;

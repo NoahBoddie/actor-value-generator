@@ -117,4 +117,31 @@ namespace TestField
 		// utmost of look up efficacy, but also so that adding stuff doesn't mess with the defaults, so vectors might be out.
 		BaseData* baseStuff;//Whether this would even be needed is subject to question, for host of reasons.
 	};
+
+
+
+	enum class StoragePriority
+	{
+		Low,      //Lowest priority, EV Storage will be dumped into a cache. Actor mustn't have an active effect list for this
+		Medium,   //Second lowest priority, EV Storage exists but no time functions do. Actor mustn't be 3d loaded for this
+		MedHigh,  //Second highest normal priority. Time functions work, but function slower than normal. For this actor is loaded, but not in high
+		High,     //Highest normal priority. Time functions work at their maximum possible speed. Actor must be in high for this to function.
+		Player,   //The highest priority in total. Player can never lower into different categories.++
+		Total = Player
+	};
+
+	inline std::map<RE::FormID, ValueData> main_storage;
+
+
+	union PriorityEntry
+	{
+		std::pair<const RE::FormID, ValueData*>* storage;
+		std::pair<const RE::FormID, CacheData*>* cache;
+	};
+
+	struct TEST_Priority
+	{
+		std::vector<PriorityEntry> priorityMap[StoragePriority::Total];
+	};
+	
 }

@@ -69,6 +69,7 @@ namespace AVG
 		//Want to move this to a hook IF I CAN so I can perhaps get and manipulate more information about hit detection.
 		EventResult ProcessEvent(const RE::TESHitEvent* a_event, RE::BSTEventSource<RE::TESHitEvent>* a_eventSource) override
 		{	
+			return EventResult::kContinue;
 			auto target = a_event->target.get();
 
 			RE::Actor* target_actor = target->As<RE::Actor>();

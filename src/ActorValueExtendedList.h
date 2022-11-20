@@ -75,6 +75,10 @@ namespace AVG
 				else
 					logger::info("success, {:08X} formID, addr {:X}", info_query->formID, (uintptr_t)info_query);
 
+				info_query->enumName = "ExtraValueStandIn";
+				info_query->abbreviation = "EV";
+
+
 				false_avi = info_query;
 			}
 
@@ -86,6 +90,7 @@ namespace AVG
 		//This shit should pull the value itself, no real reason not to.
 		static bool Create(uint32_t extended_size)
 		{
+
 			//This is some doo doo ass code, but I want this done.
 			
 			//Core issue to be is the fact that I was using the pointer directly, there's like 8 bytes
@@ -109,7 +114,7 @@ namespace AVG
 
 			logger::info("Regarded entry {:X} v {:X}", avi_list[257], rc_avi);
 
-			size_t copy_size = sizeof(RE::ActorValueInfo*) * (base_size - 1);  //minus 1 to eliminate total.
+			size_t copy_size = sizeof(RE::ActorValueInfo*) * base_size;
 
 			std::memcpy(&avi_list[1], &copy_list->actorValues, copy_size);
 

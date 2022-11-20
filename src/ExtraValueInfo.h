@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Types.h"
+#include "Utility.h"
 
 namespace AVG
 {
@@ -14,23 +15,29 @@ namespace AVG
 
 	//This is the info needed to treat this av like a skill, growing when given experience. Player only obviously.
 	//Unimplmented obviously
-	class SkillData
+	struct SkillData
 	{
 		//float experience;
         //float levelUpAt;
 	};
 
-    class UpdateData
+    struct UpdateData
     {
-		IReadyArthmetic* updateCalc = nullptr; 
-        EVTick tickToUpdate = 0;
+		//rate is required.
+		//If value to update is zero, no timed update data will be used, and instead it will only update upon load.
+		IReadyArthmetic* updateRate = nullptr; 
+        float valueToUpdate = 0.f;
     };
 
 
-    class RecoveryData
+    struct RecoveryData
     {
+		float tmp_recDelay{};
+		float tmp_recRate{};
+		
+		//While delay is not required, the rate is similarly required.
 		IReadyArthmetic* recoveryDelay = nullptr;  //Null will mean there is no delay, if recovery exists.
-		IReadyArthmetic* recoveryValue = nullptr;  //Null here means no recovery.
+		IReadyArthmetic* recoveryRate = nullptr;  //Null here means no recovery.
     };
 
 
@@ -62,6 +69,18 @@ namespace AVG
     //*/
 
 
+	enum class InfoFlags
+	{
+		None = 0,
+		DerivedAffected = 1 << 0,	//Do plugins derived inherit the av aliases of this EVI?
+
+	};
+
+	//Along with this sort of information, I believe I will likely need a class called loading info.
+	// This will store all the data that I don't want taking up permenant space, so I can just delete it later. Maybe, I can unionize it.
+	// Anywho, this load data can store the pure string data that I want to carry onto, because I'm going to need something like that
+	// for functions to be coroutines to be loaded first.
+
     class ExtraValueInfo 
     {
     //static
@@ -78,32 +97,69 @@ namespace AVG
         // sequence.
         static inline std::vector<AdaptiveValueInfo*> _adaptiveInfoList;
 
+
+		
+
         //This may use a string hash sometime in the future.
         static inline std::map<std::string, ExtraValueInfo*> _infoTable;
 
         //This will need to be able to find based on their value.
 
         //I'll need to find a way to get this to find on 3 fronts, ValueID, DataID, and string.
+
+	protected:
+		//This method will be kinda temporary.
+		static inline std::vector<std::pair<DataID, float>> _recoveryInfoList{};
+
+		//This method is just to make sure, I don't even think it's needed.
+		static inline uint32_t _numRecover = 0;
     public:
         
         static constexpr DataID FunctionalID = 0xFFFFFFFF;
 
         static ExtraValueInfo* GetValueInfoByName(std::string name) 
         { 
-            auto result = _infoTable.find(name); 
-            return result == _infoTable.end() ? nullptr : result->second; 
+			//note, I'm aware of how shit this is. But I'm in the middle of a transition.
+
+			auto result = std::find_if(_infoTable.begin(), _infoTable.end(), [=](auto it) { return Utility::StrCmpI(it.first, name); });
+
+			if (_infoTable.end() == result)
+				return nullptr;
+
+			return result->second;
+
+			
+
+			// Use std find in order to name match.
+            auto result_o = _infoTable.find(name); 
+            return result_o == _infoTable.end() ? nullptr : result_o->second; 
         }
 
+		//These 2 need checks to just straight up ignore invalid values.
         static AdaptiveValueInfo* GetValueInfoByValue(size_t i)
 		{
+			constexpr uint32_t add = static_cast<uint32_t>(RE::ActorValue::kTotal) + 1;
+
+			if (i < add)
+				return nullptr;
+
             //Currently, doesn't do as it should, this is supposed to be the list associated with the actor value enum
-			return _adaptiveCount <= i ? nullptr : _adaptiveInfoList[i];
+			return _adaptiveCount + add <= i ? nullptr : _adaptiveInfoList[i - add];
 		}
 
         static AdaptiveValueInfo* GetValueInfoByData(size_t i) 
         { 
             return _adaptiveCount <= i ? nullptr : _adaptiveInfoList[i]; 
         }
+
+		
+        static std::vector<std::pair<DataID, float>> GetRecoverableValues()
+		{
+			//This is HELLA temporary. But here's a thought, why not just create the vector I want right here,
+			// then have it be copiable from ToggleCollection?
+			return _recoveryInfoList;
+		}
+
 
         static uint32_t GetAdaptiveCount()
 		{
@@ -137,6 +193,10 @@ namespace AVG
 
 			_adaptiveInfoList.resize(const_size);
 
+			_recoveryInfoList.resize(_numRecover);
+
+			//make the creation here.
+
 			logger::info("finalized, {} vs {}", const_size, _adaptiveCount);
 		}
 
@@ -145,9 +205,16 @@ namespace AVG
 	protected:
 		//const char* valueName = nullptr;
 		std::string valueName{};
+		
+		//Might remake into a list of TESFile's to keep them on short hand.
+		std::vector<std::string> masterFiles;
+		
+
 		const char* lynchpin = nullptr;
 
 		ValueID _valueID = static_cast<ValueID>(RE::ActorValue::kTotal);  //IE, invalid.
+
+		InfoFlags _flags;
 
 	public:
 		virtual DataID  GetDataID() = 0;
@@ -202,6 +269,34 @@ namespace AVG
 		virtual bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) = 0;
 		virtual bool ModExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) = 0;
 		
+
+		inline float GetExtraValue(RE::Actor* target, RE::ACTOR_VALUE_MODIFIER modifier)
+		{
+			ExtraValueInput input;
+
+			switch (modifier) 
+			{
+			case RE::ACTOR_VALUE_MODIFIER::kTotal:
+				input = ExtraValueInput::Base;
+				break;
+
+			case RE::ACTOR_VALUE_MODIFIER::kDamage:
+				input = ExtraValueInput::Damage;
+				break;
+
+			case RE::ACTOR_VALUE_MODIFIER::kPermanent:
+				input = ExtraValueInput::Permanent;
+				break;
+
+			case RE::ACTOR_VALUE_MODIFIER::kTemporary:
+				input = ExtraValueInput::Temporary;
+				break;
+
+			}
+
+			return GetExtraValue(target, input);
+		}
+
         //Not implementing for now, it's effectively set.
 		bool ModExtraValue(RE::Actor* target, RE::ACTOR_VALUE_MODIFIER modifier, float value) { return false; }
         
@@ -249,6 +344,23 @@ namespace AVG
             _dataID = PushAdaptiveInfo(this);
 			logger::info("{}", _dataID);
 		}
+		
+		//Note, this is a temp solution.
+        AdaptiveValueInfo(std::string& name, float delay, float rate) : ExtraValueInfo{ name }
+		{
+			//I would like this to have the job if appointing this to a list. It also copies the string given.
+
+            _dataID = PushAdaptiveInfo(this);
+			_recovery = new RecoveryData();
+			_recovery->tmp_recDelay = delay;
+			_recovery->tmp_recRate = rate;
+
+			_recoveryInfoList.push_back(std::make_pair(_dataID, 0.f));  //Kinda sloppy, but less sloppy than the previous so you know.
+			_numRecover++;
+			logger::info("{}", _dataID);
+		}
+
+
     };
 
     
@@ -303,6 +415,10 @@ namespace AVG
 		}
 	};
 
+	
+	static float temp_player_delay = 0;
+		
+
     //The Psuedo namespace is erased when the time has come.
 	namespace Psuedo
 	{
@@ -355,7 +471,6 @@ namespace AVG
 			return info;
 		}
 
-		
 		inline bool ModExtraValue(RE::Actor* target, std::string ev_name, float value, RE::ACTOR_VALUE_MODIFIER modifier = RE::ACTOR_VALUE_MODIFIER::kTotal)
 		{
 			if (!value)

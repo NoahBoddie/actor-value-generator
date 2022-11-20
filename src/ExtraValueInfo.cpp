@@ -12,10 +12,10 @@ namespace AVG
 
 		
 		if (target->IsPlayerRef() == true) {
-			playerCache.DumpCache(ev_store._valueData);
+			//playerCache.DumpCache(ev_store._valueData);
 		}
 
-		return ev_store.GetValue(_dataID, value_types);
+		return ev_store.GetValue(_dataID, value_types, this);
 
 
 		//Needs to look up EVS, so this shit is just gonna wait for implementation.
@@ -52,10 +52,11 @@ namespace AVG
 			return false;
 		}
 		
-		ev_store.SetValue(_dataID, value, ev_mod);
+		ev_store.SetValue(_dataID, value, ev_mod, this);
 
-		if (target->IsPlayerRef() == true)
-			playerCache.MakeCache(ev_store._valueData);
+		if (target->IsPlayerRef() == true) {
+			//playerCache.MakeCache(ev_store._valueData);
+		}
 
 		return true;
 	}
@@ -90,10 +91,10 @@ namespace AVG
 			return false;
 		}
 
-		ev_store.ModValue(_dataID, value, ev_mod);
+		ev_store.ModValue(_dataID, value, ev_mod, this);
 
 		if (target->IsPlayerRef() == true) {
-			playerCache.MakeCache(ev_store._valueData);
+			//playerCache.MakeCache(ev_store._valueData);
 		}
 		return true;
 	}

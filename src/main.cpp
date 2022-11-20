@@ -1,6 +1,8 @@
 
 #include <stddef.h>
 
+#include <toml++/toml.h>
+
 #include "ActorValueExtendedList.h"
 #include "EventSingleton.h"
 #include "Hooks.h"
@@ -102,12 +104,16 @@ namespace {
 		RE::TESDataHandler* data_handler = RE::TESDataHandler::GetSingleton();
 
 		if (data_handler) {
-			the_setting = data_handler->LookupForm<RE::EffectSetting>(0x000802, "AVG_CrashTest.esp");
+			//RE::TESGlobal* test_1 = data_handler->LookupForm<RE::TESGlobal>(0x000810, "AVG_CrashTest.esp");
+			//RE::TESGlobal* test_2 = data_handler->LookupForm<RE::TESGlobal>(0x000801, "AVG_EditorTest.esp");
+            //logger::info("test 1: {}, test 2: {}, equal: {}", test_1 ? test_1->formID : 0, test_2 ? test_2->formID : 0, test_1 == test_2);
+
+            the_setting = data_handler->LookupForm<RE::EffectSetting>(0x000802, "AVG_CrashTest.esp");
 
 			if (the_setting) {
 				logger::info("effect set.");
-				the_setting->data.primaryAV = static_cast<RE::ActorValue>(256);
-				the_setting->data.secondaryAV = static_cast<RE::ActorValue>(256);
+				the_setting->data.primaryAV = static_cast<RE::ActorValue>(165);
+				the_setting->data.secondaryAV = static_cast<RE::ActorValue>(165);
 			}
 
 			RE::BGSPerk* the_perk = data_handler->LookupForm<RE::BGSPerk>(0x000805, "AVG_CrashTest.esp");
@@ -131,7 +137,7 @@ namespace {
 					logger::error("fail C");
 					goto end;
 				}
-				function_data->data1._float = 256;
+				function_data->data1._float = 165;
 				logger::info("first entry: {}, second entry {}", function_data->data1._float, function_data->data2._float);
 			}
 		}
@@ -150,12 +156,87 @@ namespace {
 	}
 
     
+    //should use "Data/SKSE/Plugins/ActorValueData/TestEV_AVG.toml" as it's configuration.
+	static bool temp_LoadExtraValue(const std::string a_path)
+	{
+		try {
+            //I wonder if this closes.
+			const auto table = toml::parse_file(a_path);
+
+			for (auto& [key, entry] : table) {
+				std::string ev_name = key.data();  //This may not be null terminated, may want to switch over to string views at some point.
+				int type_name = static_cast<int>(entry.type());
+                logger::info("{} is type {}", ev_name, type_name);
+                
+                if (entry.is_table() == false) {
+					logger::error("Not table {}", ev_name);
+                    continue;  //We don't currently process anything but tables.
+				}
+				std::string type = table[key]["type"].value_or("INVALID");//temporary, replace with better code plz
+
+				if (type == "INVALID") {
+					logger::error("No string for type {}", ev_name);
+					continue;
+				}
+
+
+				//Would like a hash switch here if string
+				if (type == "Adaptive") {
+					auto recovery_data = table[key]["recovery"];
+
+                    float rate;
+					float delay;
+                    bool no_rec = false;
+					
+                    if (recovery_data.is_table() == false) {//!!recovery_data, this is a double negative, not an operator.
+						logger::info("No rec data");
+                        no_rec = true;
+					}
+                    else {
+						rate = recovery_data["rate"].value_or(0.f);
+						delay = recovery_data["delay"].value_or(0.f);
+
+                        logger::info("Rec data rate: {}, delay: {}", rate, delay);
+                        no_rec = rate == 0;
+                    }
+
+                    if (no_rec)
+						new AdaptiveValueInfo(ev_name);
+					else
+						new AdaptiveValueInfo(ev_name, delay, rate);
+				}
+                else
+                {
+					logger::error("Not adaptive {}", ev_name);
+                }
+			}
+
+		} catch (const toml::parse_error& e) {
+			//For now, I'm just gonna take the L
+			/*
+			std::ostringstream ss;
+			ss
+				<< "Error parsing file \'" << *e.source().path
+				<< "\':\n"
+				<< e.description()
+				<< "\n  (" << e.source().begin << ")\n";
+			logger::error(fmt::runtime(ss.str()));
+			//*/
+			logger::error("parse fail");
+			return false;
+		}
+
+		return true;
+	}
+
 void PersonalLoad()
 {
     //Should register itself. Note, I really would like this to be a function instead of this on the outside doing this.
 	
-    std::string ev_name = "HitsTaken";
-    new AdaptiveValueInfo(ev_name);
+    //std::string ev_name = "HitsTaken";
+    //new AdaptiveValueInfo(ev_name);
+
+    temp_LoadExtraValue("Data/SKSE/Plugins/ActorValueData/TestEV_AVG.toml");
 
     ExtraValueInfo::FinishManifest();
 	Hooks::Install();
@@ -227,6 +308,8 @@ void PersonalLoad()
  * </p>
  */
 
+
+
 SKSEPluginLoad(const LoadInterface* skse) {
     InitializeLogging();
 
@@ -239,8 +322,6 @@ SKSEPluginLoad(const LoadInterface* skse) {
     InitializeMessaging();
     InitializeSerialization();
     InitializePapyrus();
-
-    
 
     log::info("{} has finished loading.", plugin->GetName());
     return true;
