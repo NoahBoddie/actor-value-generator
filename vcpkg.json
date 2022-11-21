@@ -25,10 +25,11 @@
         },
         "plugin": {
             "description": "Build the SKSE plugin.",
-            "dependencies": [
-              "commonlibsse-ng",
-              "xbyak"
-            ]
+          "dependencies": [
+            "commonlibsse-ng",
+            "xbyak",
+            "tomlplusplus"
+          ]
         },
         "tests": {
             "description": "Build tests for the SKSE plugin.",
