@@ -3,6 +3,8 @@
 
 namespace AVG
 {
+	inline bool made = false;
+
 	float AdaptiveValueInfo::GetExtraValue(RE::Actor* target, ExtraValueInput value_types)
 	{
 		if (!target)
@@ -11,8 +13,8 @@ namespace AVG
 		ExtraValueStorage& ev_store = ExtraValueStorage::GetCreateStorage(target);
 
 		
-		if (target->IsPlayerRef() == true) {
-			//playerCache.DumpCache(ev_store._valueData);
+		if (made && target->IsPlayerRef() == true) {
+			playerCache.DumpCache(ev_store._valueData);
 		}
 
 		return ev_store.GetValue(_dataID, value_types, this);
@@ -55,7 +57,12 @@ namespace AVG
 		ev_store.SetValue(_dataID, value, ev_mod, this);
 
 		if (target->IsPlayerRef() == true) {
-			//playerCache.MakeCache(ev_store._valueData);
+			if (!made) {
+				playerCache.MakeCache(ev_store._valueData);
+				made = true;
+			}
+			playerCache.SetValue(_dataID, value, ev_mod);
+			
 		}
 
 		return true;
@@ -94,7 +101,11 @@ namespace AVG
 		ev_store.ModValue(_dataID, value, ev_mod, this);
 
 		if (target->IsPlayerRef() == true) {
-			//playerCache.MakeCache(ev_store._valueData);
+			if (!made) {
+				playerCache.MakeCache(ev_store._valueData);
+				made = true;
+			}
+			playerCache.ModValue(_dataID, value, ev_mod);
 		}
 		return true;
 	}
