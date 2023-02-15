@@ -241,7 +241,7 @@ There is one last major thing pertaining to all of these different types that ne
 
 After that wall of text, the best way to end this off will be to see these types in action. So past this point, treat this as if it were an actual config file to see the proper format.
 
-\########################################################################################################
+\#######################################################################################
 
 
 \[Properties]\
