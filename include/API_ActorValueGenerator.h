@@ -17,9 +17,62 @@
 
 namespace ActorValueGeneratorAPI
 {
-	//RE::Actor* target, RE::Actor* aggressor, std::string av_name, ActorValueModifer mod(total = base), float value
-	using ExportFunction = void(*)(RE::Actor*, RE::Actor*, std::string, RE::ACTOR_VALUE_MODIFIER, float);
+	struct ExportSetData
+	{
+		using StringVector = std::vector<std::string>;
 
+		RE::Actor*					target{ nullptr };	//Targeted change of the AV.
+		RE::Actor*					cause{ nullptr };	//Used when damage happens
+
+		RE::ActorValue				av_index{ RE::ActorValue::kTotal };	//Index for the literal value
+		std::string					av_name{};							//AV name for more accurate context
+
+		RE::ACTOR_VALUE_MODIFIER	av_modifier;		//The Actor Value Modifier targeted, kTotal is base
+
+		StringVector				export_context{};	//Context stored on values
+		mutable StringVector		process_context{};	//Context passed through functions.
+
+		float						to{ 0 };			//The pure value this was just set to.
+		float						from{ NAN };	//If modded, its the result from the get function
+
+		void PushBackContext(std::string context) const { process_context.push_back(context); }
+
+#ifdef AVG_SOURCE
+
+		ExportSetData(RE::Actor* tar, RE::Actor* cus,
+			RE::ActorValue index, std::string name, RE::ACTOR_VALUE_MODIFIER mod,
+			float to_val, float from_val) :
+			target{ tar }, cause{ cus },
+			av_index{ index }, av_name{ name }, av_modifier {mod},
+			to{ to_val }, from{ from_val } {}
+
+		ExportSetData(RE::Actor* tar, RE::Actor* cus, RE::ActorValue index, std::string name,
+			RE::ACTOR_VALUE_MODIFIER mod, float to_val) :
+			target{ tar }, cause(cus), av_index{ index }, av_name{ name }, av_modifier{ mod }, to{ to_val } {}
+
+
+		ExportSetData(RE::Actor* tar, RE::ActorValue index, std::string name,
+			RE::ACTOR_VALUE_MODIFIER mod, float to_val) :
+			target{ tar }, av_index{ index }, av_name{ name }, av_modifier{ mod }, to{ to_val } {}
+#else
+
+	private:
+		ExportSetData() = delete;
+		ExportSetData(const ExportSetData&) = delete;
+		ExportSetData(ExportSetData&&) = delete;
+
+		ExportSetData& operator=(const ExportSetData&) = delete;
+		ExportSetData& operator=(ExportSetData&&) = delete;
+		~ExportSetData() = delete;
+#endif
+	};
+
+	//deprecated.
+	//RE::Actor* target, RE::Actor* aggressor, std::string av_name, ActorValueModifer mod(total = base), float value
+	using ExportFunctionV1 = void(*)(RE::Actor*, RE::Actor*, std::string, RE::ACTOR_VALUE_MODIFIER, float);
+	using ExportFunctionV2 = void(*)(RE::Actor*, RE::Actor*, std::string, std::vector<std::string>, RE::ACTOR_VALUE_MODIFIER, float);
+
+	using ExportFunction = void(*)(const ExportSetData&);
 
 	enum Version
 	{
