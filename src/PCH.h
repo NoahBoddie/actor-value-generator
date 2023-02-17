@@ -107,14 +107,55 @@
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/msvc_sink.h>
 
+#include <BGSEntryPointFunctionDataTwoValue.h>
+
+//This is to be used in this things own project
+#define ARITHMETIC_SOURCE 1
+#define AVG_SOURCE 1
+
+
+namespace logger = SKSE::log;
+
+
+
+
+//#define ARTH_OBJECT_TYPE RE::TESForm
+//#define ARTH_CONTEXT_TYPE RE::ExtraDataList
+//#define ARTH_ENUM_TYPE RE::FormType
+
+#define ARTHMETIC_LOGGER(mc_level, mc_text, ...) logger::mc_level(mc_text __VA_OPT__(,)__VA_ARGS__)
+
+#include "API_ActorValueGenerator.h"
+
+#include <Arthmetic.h>
+
+
+#include <toml++/toml.h>
+
+#include <boost/algorithm/string.hpp>
+
+#include <Serialization.h>//This is required to go later, fix that please.
+
+#include "Plugin.h"
+
+
+namespace AVG
+{
+    using namespace RGL;
+    using namespace Arthmetic;
+}
+
 // Compatible declarations with other sample projects.
 #define DLLEXPORT __declspec(dllexport)
 
 using namespace std::literals;
 using namespace REL::literals;
 
-namespace logger = SKSE::log;
-
 namespace util {
     using SKSE::stl::report_and_fail;
 }
+
+#define RELOCATION_OFFSET(SE, AE) REL::VariantOffset(SE, AE, 0).offset()
+
+#undef ARTH_TARGET_TYPE
+#undef ARTH_OBJECT_TYPE

@@ -75,8 +75,8 @@ namespace AVG
 				else
 					logger::info("success, {:08X} formID, addr {:X}", info_query->formID, (uintptr_t)info_query);
 
-				info_query->enumName = "ExtraValueStandIn";
-				info_query->abbreviation = "EV";
+				info_query->enumName = "GeneratedExtraValue";
+				info_query->abbreviation = "GEV";
 
 
 				false_avi = info_query;
@@ -102,7 +102,7 @@ namespace AVG
 			}
 			
 			uint32_t base_size = static_cast<uint32_t>(RE::ActorValue::kTotal);
-
+			//Total size is too large???
 			logger::info("total size {}", extended_size + base_size);
 			auto* avi = GetOrCreateStandIn();
 
@@ -112,7 +112,7 @@ namespace AVG
 
 			avi_list = std::vector(base_size + extended_size + 1, rc_avi);
 
-			logger::info("Regarded entry {:X} v {:X}", avi_list[257], rc_avi);
+			logger::info("Regarded entry {:X} v {:X}", avi_list.back(), rc_avi);
 
 			size_t copy_size = sizeof(RE::ActorValueInfo*) * base_size;
 
@@ -137,9 +137,10 @@ namespace AVG
 			//Experimental pointer patch, this seems to be preferable however.
 			// 
 			//This is a test to see if I can just replace the other version.
-			REL::ID old_list{ 514139 };//0x1EBE418
 			
-			REL::safe_write(old_list.address(), &begin, 0x8);
+			//REL::ID old_list{ 514139 };
+			REL::RelocationID avi_list_ptr{ 514139, 400267 };//SE: 0x1EBE418, AE: 0x1F58128, VR: ???
+			REL::safe_write(avi_list_ptr.address(), &begin, 0x8);
 
 			return;
 

@@ -3,21 +3,14 @@
 
 namespace AVG
 {
-	inline bool made = false;
-
 	float AdaptiveValueInfo::GetExtraValue(RE::Actor* target, ExtraValueInput value_types)
 	{
 		if (!target)
-			return NAN;//I'd like to return NaN, with some additional information.
+			return 0;//I'd like to return NaN, with some additional information.
 
 		ExtraValueStorage& ev_store = ExtraValueStorage::GetCreateStorage(target);
 
-		
-		if (made && target->IsPlayerRef() == true) {
-			playerCache.DumpCache(ev_store._valueData);
-		}
-
-		return ev_store.GetValue(_dataID, value_types, this);
+		return ev_store.GetValue(target, _dataID, value_types, this);
 
 
 		//Needs to look up EVS, so this shit is just gonna wait for implementation.
@@ -54,21 +47,12 @@ namespace AVG
 			return false;
 		}
 		
-		ev_store.SetValue(_dataID, value, ev_mod, this);
-
-		if (target->IsPlayerRef() == true) {
-			if (!made) {
-				playerCache.MakeCache(ev_store._valueData);
-				made = true;
-			}
-			playerCache.SetValue(_dataID, value, ev_mod);
-			
-		}
+		ev_store.SetValue(target, _dataID, value, ev_mod, this);
 
 		return true;
 	}
 
-	bool AdaptiveValueInfo::ModExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier)
+	bool AdaptiveValueInfo::ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier)
 	{
 		if (!target)
 			return false;
@@ -98,15 +82,8 @@ namespace AVG
 			return false;
 		}
 
-		ev_store.ModValue(_dataID, value, ev_mod, this);
+		ev_store.ModValue(target, aggressor, _dataID, value, ev_mod, this);
 
-		if (target->IsPlayerRef() == true) {
-			if (!made) {
-				playerCache.MakeCache(ev_store._valueData);
-				made = true;
-			}
-			playerCache.ModValue(_dataID, value, ev_mod);
-		}
 		return true;
 	}
 }
