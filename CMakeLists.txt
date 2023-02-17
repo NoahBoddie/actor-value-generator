@@ -58,7 +58,7 @@ set(sources
         src/Arthmetic/OperatorType.h
         src/Arthmetic/ArgumentType.h
         src/Arthmetic/RoutineArgument.h
-        #src/Arthmetic/RoutineDelegate.h
+        src/Arthmetic/RoutineDelegate.h
         src/Arthmetic/RoutineItem.h
         src/Arthmetic/RoutineItemType.h
         src/Arthmetic/TargetType.h
