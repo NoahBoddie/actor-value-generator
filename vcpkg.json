@@ -28,7 +28,8 @@
           "dependencies": [
             "commonlibsse-ng",
             "xbyak",
-            "tomlplusplus"
+            "tomlplusplus",
+            "boost-algorithm"
           ]
         },
         "tests": {

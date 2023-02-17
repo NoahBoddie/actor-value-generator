@@ -1,14 +1,17 @@
 {
+    "default-registry": {
+    "kind": "builtin",
+    "baseline": ""
+    },
     "registries": [
         {
             "kind": "git",
-            "repository": "https://github.com/NoahBoddie/ActorValueGenerator",
-            "baseline": "5a11d06fd1b2d7cd6339d6aea48d450309e89cc1",
+            "repository": "https://gitlab.com/colorglass/vcpkg-colorglass",
+            "baseline": "5051ea1c8131351d23ba44b51b1ac650676f4ad5",
             "packages": [
-                "articuno",
                 "bethesda-skyrim-scripts",
                 "commonlibsse-ng",
-                "gluino",
+                "commonlibsse-ng-flatrim",
                 "script-extender-common",
                 "skse"
             ]

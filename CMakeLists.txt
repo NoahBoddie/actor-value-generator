@@ -20,10 +20,83 @@ configure_file(
         ${CMAKE_CURRENT_BINARY_DIR}/version.rc
         @ONLY)
 
+#trying this out for right now.
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+set(VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/src/Plugin.h")
+configure_file(
+	"${CMAKE_CURRENT_SOURCE_DIR}/cmake/Plugin.h.in"
+	"${VERSION_HEADER}"
+	@ONLY
+)
+
 set(headers
-        include/Types.h)
+#I would really like to make this as a sort of dependency instead. But for now.
+        include/Arthmetic.h
+        include/Serialization.h
+        include/RoguesGallery.h
+
+        include/API_Arithmetic.h
+        include/API_ActorValueGenerator.h
+)
 
 set(sources
+        src/Arthmetic/Constructor.h
+        src/Arthmetic/ArthmeticObject.h
+        src/Arthmetic/IDelegate.h
+        src/Arthmetic/DelegateType.h
+        src/Arthmetic/IRoutine.h
+        src/Arthmetic/Coroutine.h
+        src/Arthmetic/Subroutine.h
+        src/Arthmetic/DelegateArgument.h
+        src/Arthmetic/DelegateArgument.h
+        #src/Arthmetic/DualOperator.h
+        #src/Arthmetic/OpenOperator.h
+        #src/Arthmetic/FunctionDelegate.h
+        src/Arthmetic/IReadyArthmetic.h
+        src/Arthmetic/IOperator.h
+        src/Arthmetic/OperatorType.h
+        src/Arthmetic/ArgumentType.h
+        src/Arthmetic/RoutineArgument.h
+        #src/Arthmetic/RoutineDelegate.h
+        src/Arthmetic/RoutineItem.h
+        src/Arthmetic/RoutineItemType.h
+        src/Arthmetic/TargetType.h
+        src/Arthmetic/Record.h
+        src/Arthmetic/IDirective.h
+        src/Arthmetic/IFormula.h
+        src/Arthmetic/FunctionInterface.h
+        src/Arthmetic/FormulaDelegate.h
+        src/Arthmetic/ParameterSetting.h
+
+        src/Arthmetic/ArthmeticConstructor.h
+        src/Arthmetic/ArthmeticParser.h
+        src/Arthmetic/ArthmeticUtility.h
+        src/Arthmetic/RoutineItem.cpp
+        src/Arthmetic/IReadyArthmetic.cpp
+        src/Arthmetic/DelegateArgument.cpp
+
+
+        src/Serialization/ISerializer.h
+        src/Serialization/SerialArgument.h
+        src/Serialization/SerialComponent.h
+        src/Serialization/SerialConstructor.h
+        src/Serialization/SerialIterator.h
+        src/Serialization/SerializableList.h
+        src/Serialization/SerializableMap.h
+        src/Serialization/SerializableObject.h
+        src/Serialization/SerializablePair.h
+        src/Serialization/SerializationTypePlayground.h
+        src/Serialization/SerializingWrapper.h
+
+      
+        src/RoguesGallery/Utility.h
+        src/RoguesGallery/TemporaryFlag.h
+
+
+        src/Types.h
+        src/ExtraValue.h
+        src/BGSEntryPointFunctionDataTwoValue.h
         src/main.cpp
         src/ActorValueExtendedList.h
         src/ExtraValueInfo.h
@@ -31,7 +104,15 @@ set(sources
         src/ExtraValueInfo.cpp
         src/ExtraValueStorage.cpp
         src/EventSingleton.h
+        src/FormExtraValueHandler.h
         src/Hooks.h
+        src/Addresses.h
+        src/Utility.h
+        src/ValueAliasHandler.h
+
+        src/API_Arithmetic.cpp
+        src/API_ActorValueGenerator.cpp
+
         ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
 
 #set(tests
