@@ -38,7 +38,7 @@
 //#include <Arthmetic/OpenOperator.h>
 #include <Arthmetic/IOperator.h>
 #include <Arthmetic/OperatorType.h>
-//#include <Arthmetic/RoutineDelegate.h>
+#include <Arthmetic/RoutineDelegate.h>
 #include <Arthmetic/RoutineItemType.h>
 #include <Arthmetic/Subroutine.h>
 #include <Arthmetic/ArgumentType.h>
