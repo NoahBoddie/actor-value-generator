@@ -277,9 +277,9 @@ alias = "Variable02"
 get.base = "1"\
 get.permanent = "2"\
 get.temporary = "2"\
-get.damage = "-1 * 2 ^ 2"\
+get.damage = "-1 * 2 ^ 2"
 
-set.damage = "DamageHealth"
+set.damage = [ "AffectActorValue", "Health" ]
 
 
 
