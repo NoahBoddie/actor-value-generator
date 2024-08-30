@@ -267,7 +267,8 @@ struct Utility
 			CASE_OF_RETURN(Assistance);
 			CASE_OF_RETURN(OneHanded);
 			CASE_OF_RETURN(TwoHanded);
-			CASE_OF_RETURN(Archery);
+			case RE::ActorValue::kArchery: return "Marksman";//Not using marksman is ridiculous
+			//CASE_OF_RETURN(Archery);
 			CASE_OF_RETURN(Block);
 			CASE_OF_RETURN(Smithing);
 			CASE_OF_RETURN(HeavyArmor);
@@ -450,6 +451,8 @@ struct Utility
 			CASE_OF_RETURN(Assistance);
 			CASE_OF_RETURN(OneHanded);
 			CASE_OF_RETURN(TwoHanded);
+			
+			case"Marksman"_ih:
 			CASE_OF_RETURN(Archery);
 			CASE_OF_RETURN(Block);
 			CASE_OF_RETURN(Smithing);

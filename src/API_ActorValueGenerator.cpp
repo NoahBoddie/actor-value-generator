@@ -14,10 +14,11 @@ namespace ActorValueGeneratorAPI
 		Version GetVersion() override { return Version::Current; }
 
 
-		void RegisterExportFunction(std::string name, ExportFunction func) override
+		void RegisterExportFunction(std::string_view name, ExportFunction func) override
 		{
 			//For now I don't really care about making this check for null.
-			exportMap[name] = func;
+			logger::info("export function {} registered.", name);
+			exportMap[std::string(name)] = func;
 		}
 
 		void CheckActorValue(RE::ActorValue& av, const char* c_str) override
@@ -63,7 +64,7 @@ namespace ActorValueGeneratorAPI
 		}
 	};
 
-	CurrentInterface* InferfaceSingleton()
+	[[nodiscard]] CurrentInterface* InferfaceSingleton()
 	{
 		static ActorValueGeneratorInterface intfc{};
 		return &intfc;

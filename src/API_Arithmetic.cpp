@@ -55,17 +55,18 @@ namespace ArithmeticAPI
 			return arg->GetCStringParam();
 		}
 
-		void LinkNativeFunction(std::string str, NativeFormula function, ParamConstraints) override
+		void LinkNativeFunction(std::string_view str, NativeFormula function, ParamConstraints) override
 		{
 			logger::info("nat func link called: '{}'", str);
 			
-			IFormula* formula = formulaMap[str];
+			IFormula* formula = formulaMap[std::string(str)];
 
 			auto func_intfc = dynamic_cast<FunctionInterface*>(formula);
 
-			if (!func_intfc)
+			if (!func_intfc) {
+				logger::error("No routine found at {}.", str);
 				return;
-
+			}
 			//Currently, I can't actually do this because the types aren't right. But I'd like to edit that overtime.
 			func_intfc->_callback = function;
 
@@ -74,7 +75,7 @@ namespace ArithmeticAPI
 	};
 
 
-	CurrentInterface* InferfaceSingleton()
+	[[nodiscard]] CurrentInterface* InferfaceSingleton()
 	{
 		static ArithmeticInterface intfc{};
 		return &intfc;

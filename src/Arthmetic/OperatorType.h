@@ -201,7 +201,6 @@ namespace Arthmetic
 	{
 		if (1 == 1)
 		{
-			logger::info("to {}", (int)type);
 			switch (type)
 			{
 			case OperatorType::Jump_Parenthesis:

@@ -159,9 +159,9 @@ namespace RGL
 
 
 #define ENUM_2(mc_enum_name, mc_integer_name) \
-namespace detail { struct MacroStruct__##mc_enum_name { enum Type : mc_integer_name; }; }\
-using mc_enum_name = detail::MacroStruct__##mc_enum_name::Type; \
-enum detail::MacroStruct__##mc_enum_name::Type : mc_integer_name 
+namespace detail { struct MacroStruct__##mc_enum_name { enum mc_enum_name##Type : mc_integer_name; }; }\
+using mc_enum_name = detail::MacroStruct__##mc_enum_name::mc_enum_name##Type; \
+enum detail::MacroStruct__##mc_enum_name::mc_enum_name##Type : mc_integer_name 
 
 #define ENUM_1(mc_enum_name) ENUM_2(mc_enum_name, int)
 

@@ -19,39 +19,41 @@ namespace ActorValueGeneratorAPI
 {
 	struct ExportSetData
 	{
-		using StringVector = std::vector<std::string>;
+		using CString = const char*;
+		using StringContainer = ABIContainer<CString>;
 
 		RE::Actor*					target{ nullptr };	//Targeted change of the AV.
 		RE::Actor*					cause{ nullptr };	//Used when damage happens
 
 		RE::ActorValue				av_index{ RE::ActorValue::kTotal };	//Index for the literal value
-		std::string					av_name{};							//AV name for more accurate context
+		CString						av_name{};							//AV name for more accurate context
 
 		RE::ACTOR_VALUE_MODIFIER	av_modifier;		//The Actor Value Modifier targeted, kTotal is base
 
-		StringVector				export_context{};	//Context stored on values
-		mutable StringVector		process_context{};	//Context passed through functions.
+		StringContainer				export_context{};	//Context stored on values
+		mutable StringContainer		process_context{};	//Context passed through functions.
 
 		float						to{ 0 };			//The pure value this was just set to.
 		float						from{ NAN };	//If modded, its the result from the get function
 
-		void PushBackContext(std::string context) const { process_context.push_back(context); }
+		//Cannot increase size anymore.
+		//void PushBackContext(std::string context) const { process_context.push_back(context); }
 
 #ifdef AVG_SOURCE
 
 		ExportSetData(RE::Actor* tar, RE::Actor* cus,
-			RE::ActorValue index, std::string name, RE::ACTOR_VALUE_MODIFIER mod,
+			RE::ActorValue index, CString name, RE::ACTOR_VALUE_MODIFIER mod,
 			float to_val, float from_val) :
 			target{ tar }, cause{ cus },
 			av_index{ index }, av_name{ name }, av_modifier {mod},
 			to{ to_val }, from{ from_val } {}
 
-		ExportSetData(RE::Actor* tar, RE::Actor* cus, RE::ActorValue index, std::string name,
+		ExportSetData(RE::Actor* tar, RE::Actor* cus, RE::ActorValue index, CString name,
 			RE::ACTOR_VALUE_MODIFIER mod, float to_val) :
 			target{ tar }, cause(cus), av_index{ index }, av_name{ name }, av_modifier{ mod }, to{ to_val } {}
 
 
-		ExportSetData(RE::Actor* tar, RE::ActorValue index, std::string name,
+		ExportSetData(RE::Actor* tar, RE::ActorValue index, CString name,
 			RE::ACTOR_VALUE_MODIFIER mod, float to_val) :
 			target{ tar }, av_index{ index }, av_name{ name }, av_modifier{ mod }, to{ to_val } {}
 #else
@@ -91,7 +93,7 @@ namespace ActorValueGeneratorAPI
 		/// Gets the current version of the interface.
 		/// </summary>
 		/// <returns></returns>
-		virtual Version GetVersion() = 0;
+		[[nodiscard]] virtual Version GetVersion() = 0;
 
 
 		//Target will have to be defined here if there's no source, just for the transfers sake. It doesn't nothing special anyhow.
@@ -101,14 +103,14 @@ namespace ActorValueGeneratorAPI
 		/// </summary>
 		/// <param name="export_name"></param>
 		/// <param name="function"></param>
-		virtual void RegisterExportFunction(std::string export_name, ExportFunction function) = 0;
+		[[nodiscard]] virtual void RegisterExportFunction(std::string_view export_name, ExportFunction function) = 0;
 
 		/// <summary>
 		/// Checks an actor value, turning it into the actor value the name designated.
 		/// </summary>
 		/// <param name="av_ref">is actor value index to alter. Will be set to total upon failure.</param>
 		/// <param name="av_name">is name of the ActorValue or ExtraValue requested.</param>
-		virtual void CheckActorValue(RE::ActorValue& av_ref, const char* av_name) = 0;
+		[[nodiscard]] virtual void CheckActorValue(RE::ActorValue& av_ref, const char* av_name) = 0;
 
 		/// <summary>
 		/// Sets the AVDelay of an actor value. Currently unimplement.
@@ -117,7 +119,7 @@ namespace ActorValueGeneratorAPI
 		/// <param name="actor_value"></param>
 		/// <param name="new_delay"></param>
 		/// <returns></returns>
-		virtual bool SetAVDelay(RE::Actor* target, RE::ActorValue actor_value, float new_delay) = 0;
+		[[nodiscard]] virtual bool SetAVDelay(RE::Actor* target, RE::ActorValue actor_value, float new_delay) = 0;
 
 	};
 

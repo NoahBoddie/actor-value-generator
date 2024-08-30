@@ -65,7 +65,7 @@ namespace Arthmetic
 
 			ParameterList p_list(formula->_paramSettingList ? formula->_paramSettingList->size() : params.size());
 
-			//logger::info("Other pre-two {} {}", params.size(), p_list.size());
+			logger::debug("Other pre-two {} {}, @ {}", params.size(), p_list.size(), (uintptr_t)&p_list);
 			
 			//Still rough
 			for (int i = 0; i < params.size(); i++)
@@ -74,9 +74,9 @@ namespace Arthmetic
 				continue;
 
 				if (p_list[i].GetType() == ArgumentType::Number)
-					logger::info("formula number {} is {}", (int)p_list[i]._type, p_list[i].GetNumberParam(argument));
+					logger::debug("formula number {} is {}", (int)p_list[i]._type, p_list[i].GetNumberParam(argument));
 				else
-					logger::info("formula type {}", (int)p_list[i]._type);
+					logger::debug("formula type {}", (int)p_list[i]._type);
 			}
 
 			//logger::info("Other pre-handle2 {}", handle);
@@ -125,7 +125,7 @@ namespace Arthmetic
 			constexpr int space_taker = 0;
 
 			for (auto& arg : params) {
-				arg.SetOwner(owner, space_taker);
+				arg.SetOwner(owner, &owner_stack, this);
 			}
 
 			logger::debug("Formula Delegate ownership set.");
@@ -168,7 +168,7 @@ namespace Arthmetic
 					continue;
 
 				if (arg.IsParameter() == true && link_type == LinkerFlags::External || arg.IsObject() == true && link_type == LinkerFlags::Object)
-					if (arg.SetOwner(nullptr, space_taker) == false)
+					if (arg.SetOwner(nullptr, nullptr, nullptr) == false)
 						success = false;
 
 				

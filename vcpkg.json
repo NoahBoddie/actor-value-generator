@@ -29,7 +29,8 @@
             "commonlibsse-ng",
             "xbyak",
             "tomlplusplus",
-            "boost-algorithm"
+            "boost-algorithm",
+            "boost-regex"
           ]
         },
         "tests": {

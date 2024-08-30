@@ -84,23 +84,27 @@ namespace Arthmetic
             
             if (IsParameter() == true)
             {
-                logger::info("numbered parameter? {} / {}", _index, argument && argument->_args);
+                logger::debug("numbered parameter? {} / {}", _index, argument && argument->_args);
 
                 return !argument || !argument->_args ? 0 : (*argument->_args)[_index].GetNumberParam(argument);
 
             }
             else if (IsProperty() == true){
+                
                 return _property->GetNumberParam(selector);
             }
-            else
+            else {
+                logger::debug("returning number {}", _number);
                 return _number;
+            }
         case ArgumentType::Arthmetic:
         {
-            logger::info("arth hit {}", _arthmetic != nullptr);
+            logger::debug("arth hit {}", _arthmetic != nullptr);
             return _arthmetic->RunImpl(argument);
         }
 
         default:
+            logger::error("Improper type {}", (int)_type);
             return 0;//This is to throw when the time comes.
         }
     }
@@ -154,7 +158,8 @@ namespace Arthmetic
     }
 
 
-    bool DelegateArgument::SetOwner(IDirective* directive, int index)
+    //I really would like to make this something fucking else at some point. That would make me delighted.
+    bool DelegateArgument::SetOwner(IDirective* directive, std::deque<ArthmeticObject*>* owner_stack, ArthmeticObject* owner)//, int index)
     {
         //Index isn't used right now, but it's used to test the would be parameters for validation.
 
@@ -166,8 +171,8 @@ namespace Arthmetic
 
         logger::debug("owner set, arg type {} {}", (int)cleaned_type, (int)_type);
         
-        if (cleaned_type != ArgumentType::Parameter && cleaned_type != ArgumentType::UnlinkedObject)
-            return true;//Not a null arg, bailing
+        //if (cleaned_type != ArgumentType::Parameter && cleaned_type != ArgumentType::UnlinkedObject)
+        //    return true;//Not a null arg, bailing
 
         switch (cleaned_type)
         {
@@ -224,6 +229,17 @@ namespace Arthmetic
                 else {
                     do_return_X(logger::error("Object '{}' not found", code), false);
                 }
+            }
+            break;
+        case ArgumentType::Arthmetic:
+            if (auto formula = dynamic_cast<IFormula*>(_arthmetic); owner_stack && formula) {
+                logger::info("Linked subarthmetic");
+                formula->DeclareOwner(*owner_stack, owner);
+            }
+            else
+            {
+                logger::error("No sub arthmetic or not setting owner.");
+                return false;
             }
             break;
         }

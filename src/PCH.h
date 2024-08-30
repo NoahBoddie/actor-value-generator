@@ -133,6 +133,7 @@ namespace logger = SKSE::log;
 #include <toml++/toml.h>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/regex.hpp>
 
 #include <Serialization.h>//This is required to go later, fix that please.
 
@@ -155,7 +156,7 @@ namespace util {
     using SKSE::stl::report_and_fail;
 }
 
-#define RELOCATION_OFFSET(SE, AE) REL::VariantOffset(SE, AE, 0).offset()
+#define RELOCATION_OFFSET(SE, AE, ...) REL::VariantOffset(SE, AE, SE).offset()
 
 #undef ARTH_TARGET_TYPE
 #undef ARTH_OBJECT_TYPE

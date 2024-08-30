@@ -13,7 +13,6 @@
 
 #include "ExtraValue.h"
 
-#include "TempAPIField.h"//Delete me in time.
 
 using namespace RE::BSScript;
 using namespace AVG;
@@ -58,7 +57,7 @@ namespace {
 
         spdlog::set_default_logger(std::move(log));
         //spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%n] [%l] [%t] [%s:%#] %v");
-        spdlog::set_pattern("%g(%#): [%^%l%$] %v"s);
+        spdlog::set_pattern("%s(%#): [%^%l%$] %v"s);
     }
 
     
@@ -104,7 +103,123 @@ namespace {
 			bool is_plugin = name.contains(".es");
 
 			auto& alias_node = is_plugin ? pluginAliasMap[name] : keywordAliasMap[name];
+			/*
+			for (auto& entry : list)
+			{
+				if (entry == "") {
+					logger::warn("Include entry is empty.");
+					continue;
+				}
 
+				std::vector<std::string> results;
+
+				results = boost::split(results, entry, boost::is_any_of("="));
+
+				std::string ev_name;
+
+
+				//The list of aliases this will be being set to.
+				std::vector<RE::ActorValue> alias_list;
+
+				ExtraValueInfo* info = nullptr;
+
+				std::string av_name;
+
+				SpecialAlias spec_type = SpecialAlias::None;
+
+				ExtraValueType type = ExtraValueType::Total;
+
+				ValueID offset;
+
+				if (results.size() > 1)
+				{
+					boost::trim(results[0]);
+					boost::trim(results[1]);
+
+					av_name = results[0];
+					std::string left_str = results[1];
+					
+					//I want some way to do this.
+					switch (hash<true>(left_str))
+					{
+					//case "RightCost"_ih:	//RightCharge
+					//case "LeftCost"_ih:	//LeftCharge
+					//case "EnchCost"_ih:	//Right/LeftCharge
+					//case "MagicCost"_ih:	//Magicka/Right/LeftCharge
+					case "SpellCost"_ih:	//Magicka
+					{
+						alias_list.push_back(RE::ActorValue::kMagicka);
+						spec_type = SpecialAlias::Cost;
+						
+					}
+					break;
+
+					default:
+					{
+						RE::ActorValue alias_value = Utility::StringToActorValue(left_str);
+						
+						if (alias_value == RE::ActorValue::kTotal) {
+							//Shit is invalid, do not proceed.
+							continue;
+						}
+
+						if (is_plugin && alias_value == RE::ActorValue::kNone) {
+							logger::warn("None is not a viable alias to use on a plugin.");
+							continue;
+						}
+
+						alias_list.push_back(alias_value);
+					}
+					break;
+					}
+					info = ExtraValueInfo::GetValueInfoByName(av_name);
+
+					logger::info("Custom alias for {} detected, using '{}'", results[0], results[1]);
+				}
+				else
+				{
+					av_name = boost::trim_copy(entry);
+
+					info = ExtraValueInfo::GetValueInfoByName(av_name);
+
+					if (!info) {
+						logger::error("No ExtraValueInfo detected for '{}'", av_name);
+						continue;
+					}
+					
+					if (Utility::IsValidValue(info->_aliasID) == true) {
+						alias_list.push_back(info->_aliasID);
+					}
+					else {
+						//This shit is invalid
+						logger::error("Extra Value {} has no default alias to be used by include list.", av_name);
+						continue;
+					}
+				}
+
+				if (info) {
+					av_name = info->GetName();//To be proper in casing.
+					offset = info->GetOffset();
+					type = info->GetType();
+				}
+				else if (auto index = Utility::StringToActorValue(av_name); index != RE::ActorValue::kTotal)
+				{
+					offset = static_cast<ValueID>(index);
+				}
+				else {
+					continue;
+				}
+
+				for (auto& alias_entry : alias_list)
+				{
+
+					logger::info("Including {} to {} at {}", ev_name, name, (int)alias_entry);
+					alias_node.AddSettingTest(alias_entry, type, offset, av_name, info, spec_type, AliasSettingFlag::None);
+
+				}
+			}
+
+			/*/
 			for (auto& entry : list)
 			{
 				if (entry == "") {
@@ -126,6 +241,13 @@ namespace {
 					boost::trim(results[1]);
 					
 					ev_name = results[0];
+					//std::string left_str = results[1];
+
+					//I want some way to do this.
+					//switch (hash<true>(left_str))
+					//{
+					//default:
+					//}
 					alias_value = Utility::StringToActorValue(results[1]);
 
 					if (alias_value == RE::ActorValue::kTotal) {
@@ -177,6 +299,7 @@ namespace {
 
 				alias_node.AddSetting(alias_value, info, AliasSettingFlag::None);
 			}
+			//*/
 		}
 	}
 
@@ -1036,7 +1159,7 @@ namespace {
 
 
 	//float GetRandomRange(RE::Actor* target, const std::vector<Arthmetic::DelegateArgument>& parameter)
-	float GetRandomRange(Target target, const ArgumentList& args)
+	float GetRandomRange(Target target, const ArgumentList args)
 	{
 		if (target) {
 			//We remove the load order defined part of the seed. This basically allows
@@ -1065,7 +1188,7 @@ namespace {
 	};
 
 
-	float GetActorValue(Target target, const ArgumentList& args)
+	float GetActorValue(Target target, const ArgumentList args)
 	{
 		//Now in this sort of situation, I think it's pro
 		RE::Actor* target_actor = target->As<RE::Actor>();
@@ -1079,7 +1202,7 @@ namespace {
 
 		float value = Psuedo::GetEitherValue(target_actor, av_name, input);
 
-		logger::trace("{}'s check of AV:'{}' is {}",target_actor->GetName(), av_name, value);
+		logger::trace("{}'s check of AV:'{}'({}) is {}",target_actor->GetName(), av_name, (int)input, value);
 
 		if (isnan(value) == true)
 			return 0;//Actually throw an exception.
@@ -1088,7 +1211,7 @@ namespace {
 	};
 	
 
-	float GetCrimeGold(Target target, const ArgumentList& args)
+	float GetCrimeGold(Target target, const ArgumentList args)
 	{
 		//Now in this sort of situation, I think it's pro
 		RE::Actor* target_actor = target->As<RE::Actor>();
@@ -1134,7 +1257,7 @@ namespace {
 	};
 
 
-	float GetLevel(Target target, const ArgumentList& args)
+	float GetLevel(Target target, const ArgumentList args)
 	{
 
 		RE::Actor* target_actor = target->As<RE::Actor>();
@@ -1151,7 +1274,7 @@ namespace {
 		return (float)result;
 	};
 
-	float GetPlayerLevelDistance(Target target, const ArgumentList& args)
+	float GetPlayerLevelDistance(Target target, const ArgumentList args)
 	{
 		RE::PlayerCharacter* player = RE::PlayerCharacter::GetSingleton();
 
@@ -1181,7 +1304,7 @@ namespace {
 	};
 
 
-	float HasPerks(Target target, const ArgumentList& args)
+	float HasPerks(Target target, const ArgumentList args)
 	{
 		//String, number, maybe number. Name, should count all, maybe skill requirement.
 		//could be interesting if I introduce skill requirements
@@ -1300,7 +1423,7 @@ namespace {
 	};
 
 
-	float GetGlobalValue(Target target, const ArgumentList& args)
+	float GetGlobalValue(Target target, const ArgumentList args)
 	{
 		RE::TESGlobal* global = target->As<RE::TESGlobal>();
 
@@ -1309,7 +1432,7 @@ namespace {
 	};
 
 	//Used while I don't have targeting shit
-	float GetGlobalValueParam(Target target, const ArgumentList& args)
+	float GetGlobalValueParam(Target target, const ArgumentList args)
 	{
 		RE::TESForm* param = args[0]->GetObjectParam();
 
@@ -1319,7 +1442,7 @@ namespace {
 	};
 
 
-	float GetItemCount(Target target, const ArgumentList& args)
+	float GetItemCount(Target target, const ArgumentList args)
 	{
 		//Notice, I wish to improve this shit plz.
 		RE::TESObjectREFR* refr = target->As<RE::TESObjectREFR>();
@@ -1339,7 +1462,7 @@ namespace {
 		return inventory_counts[object];
 	};
 
-	float GetHasMagicEffect(Target target, const ArgumentList& args)
+	float GetHasMagicEffect(Target target, const ArgumentList args)
 	{
 		RE::Actor* actor = target->As<RE::Actor>();
 
@@ -1403,7 +1526,7 @@ namespace {
 	};
 
 
-	float GetGameSetting(Target target, const ArgumentList& args)
+	float GetGameSetting(Target target, const ArgumentList args)
 	{
 		RE::Actor* target_actor = target->As<RE::Actor>();
 		
@@ -1442,19 +1565,130 @@ namespace {
 	};
 
 	//These 2 should account for context I think.
-	float GetKeyword(Target target, const ArgumentList& args)
+	float IsInFaction(Target target, const ArgumentList args)
 	{
+		if (!target || target->formType != RE::FormType::ActorCharacter)
+			return 0;
+
+		RE::TESForm* query_form = args[0]->GetObjectParam();
+
+		//If min is lower than max, it's reversed, and requires that the ranks be not within the range
+		float min_rank = args[1]->GetNumberParam();
+		float max_rank = args[2]->GetNumberParam();
+
+		bool inverted = min_rank > max_rank;
+
+		if (inverted){
+			std::swap(min_rank, max_rank);
+		}
+
+		if (!query_form)
+			return 0;
+
+		//logger::info("TEST, {}, {}", target->As<RE::BGSKeywordForm>() != nullptr, query_form->formType == RE::FormType::Keyword);
+
+		if (query_form->formType != RE::FormType::Faction)
+			return 0;
+		//If the range is equal, it will only get what's current.
+		if (min_rank == -1 && max_rank == -1) {
+			return target->As<RE::Actor>()->IsInFaction(query_form->As<RE::TESFaction>());
+		}
+		else
+		{
+			RE::TESFaction* faction = query_form->As<RE::TESFaction>();
+			RE::Actor* actor = target->As<RE::Actor>();
+
+			auto* faction_changes = actor->extraList.GetByType<RE::ExtraFactionChanges>();
+
+			auto fact_lamba = [=](auto& fact_data) {
+				return fact_data.faction == faction &&
+					fact_data.rank != -1 &&
+					(fact_data.rank > min_rank - 1) == !inverted &&
+					(fact_data.rank < max_rank + 1) == !inverted;
+			};
+
+			if (faction_changes)
+			{
+				auto end = faction_changes->factionChanges.end();
+				auto it = std::find_if(faction_changes->factionChanges.begin(), end, fact_lamba);
+
+				if (it != end)
+					return 1;
+			}
+			auto baseNPC = actor->GetActorBase();
+			if (baseNPC)
+			{
+				auto end = baseNPC->factions.end();
+				auto it = std::find_if(baseNPC->factions.begin(), end, fact_lamba);
+
+				if (it != end)
+					return 1;
+			}
+		}
+		//It shouldn't reach this point but it's whatever right now.
+
+		return 0;
+	};
+
+	float IsRace(Target target, const ArgumentList args)
+	{
+		if (!target || target->formType != RE::FormType::ActorCharacter)
+			return 0;
+
+		//if (!target || target->formType != RE::FormType::NPC)
+		//	return 0;
+
+		RE::TESForm* query_form = args[0]->GetObjectParam();
+		
+
+		if (!query_form || query_form->formType != RE::FormType::Race)
+			return 0;
+
+
+		float original = args[1]->GetNumberParam();
+
+		RE::Actor* actor = target->As<RE::Actor>();
+
+		//we have 
+		//actor->GetActorBase()->originalRace
+		//and if player, charGenRace
+		// For now I'm going to use original race. Unsure if it'll work.
+
+		RE::TESNPC* base = actor->GetActorBase();
+
+		RE::TESRace* act_race = original && base ? base->originalRace : actor->GetActorRuntimeData().race;
+
+		return act_race == query_form->As<RE::TESRace>();
+
+	};
+
+
+
+	//These 2 should account for context I think.
+	float GetKeyword(Target target, const ArgumentList args)
+	{
+		if (!target)
+			return 0;
+
 		RE::TESForm* query_form = args[0]->GetObjectParam();
 		float match_all = args[1]->GetNumberParam();
 
 		if (!query_form)
 			return 0;
 
+		//logger::info("TEST, {}, {}", target->As<RE::BGSKeywordForm>() != nullptr, query_form->formType == RE::FormType::Keyword);
+
+		if (query_form->formType != RE::FormType::Keyword)
+			return 0;
+
 		if (query_form->formType == RE::FormType::FormList)
 			return target->HasKeywordInList(query_form->As<RE::BGSListForm>(), match_all);
-		else if (RE::BGSKeywordForm* keyword_form = skyrim_cast<RE::BGSKeywordForm*>(target.focus); 
-			keyword_form && query_form->formType == RE::FormType::Keyword)
+		
+		if (RE::BGSKeywordForm* keyword_form = target->As<RE::BGSKeywordForm>(); keyword_form)
 			return keyword_form->HasKeyword(query_form->As<RE::BGSKeyword>());
+
+		if (RE::TESObjectREFR* refr = target->As<RE::TESObjectREFR>(); refr)
+			return refr->HasKeyword(query_form->As<RE::BGSKeyword>());
 
 		//It shouldn't reach this point but it's whatever right now.
 		
@@ -1462,15 +1696,23 @@ namespace {
 	};
 
 
-	float GetKeywordString(Target target, const ArgumentList& args)
+	float GetKeywordString(Target target, const ArgumentList args)
 	{
+
+		if (!target)
+			return 0;
+
+
 		std::string keyword_string = args[0]->GetStringParam();
 		
-		if (RE::BGSKeywordForm* keyword_form = skyrim_cast<RE::BGSKeywordForm*>(target.focus);
+		if (RE::BGSKeywordForm* keyword_form = target->As<RE::BGSKeywordForm>();
 			keyword_form && keyword_string != "")
 			return keyword_form->HasKeywordString(keyword_string);
 
-		//It shouldn't reach this point but it's whatever right now.
+		if (RE::TESObjectREFR* refr = target->As<RE::TESObjectREFR>(); refr)
+			if (RE::BGSKeyword* keyword = RE::TESForm::LookupByEditorID<RE::BGSKeyword>(keyword_string); keyword)
+				return refr->HasKeyword(keyword);
+
 
 		return 0;
 	};
@@ -1588,15 +1830,16 @@ namespace {
 		return handler->LookupForm(static_cast<RE::FormID>(value), target_plugin);
 	}
 
+	inline REL::Version _currentVersion{};
 	uint32_t RGL::GetProjectVersion()
 	{
-		constexpr REL::Version version(1, 8, 7, 4);
+		//constexpr REL::Version version(1, 8, 7, 4);
 
 		//1.0.0.0 Use the Commonlib versioning later. It has a packing function.
-		return version.pack();
+		return _currentVersion.pack();
 	}
 
-	void temp_AssignFormula(std::string key, float(*func)(Target, const ArgumentList&))
+	void temp_AssignFormula(std::string key, float(*func)(Target, const ArgumentList))
 	{
 		auto result = formulaMap.find(key);
 		
@@ -1620,6 +1863,8 @@ namespace {
 		temp_AssignFormula("GetRandomRange", GetRandomRange);
 		temp_AssignFormula("GetActorValue", GetActorValue);
 		temp_AssignFormula("GetCrimeGold", GetCrimeGold);
+		temp_AssignFormula("IsRace", IsRace);
+		temp_AssignFormula("IsInFaction", IsInFaction);
 		temp_AssignFormula("GetKeyword", GetKeyword);
 		temp_AssignFormula("GetHasMagicEffect", GetHasMagicEffect);
 		temp_AssignFormula("GetItemCount", GetItemCount);
@@ -1635,6 +1880,37 @@ namespace {
 
 	void StartOther()
 	{
+		return;
+		std::string func1 = "GetActorValue('SingleWielding', Damage | Permanent) - GetActorValue('SingleWielding', Damage | Permanent)";
+		std::string func = "label_1; GetActorValue(::ending = 'SingleWielding', ActorValue::Damage | ActorValue::Permanent); return result";
+
+		std::string::const_iterator start, end;
+		start = func.begin();
+		end = func.end();
+
+		const boost::regex test_regex1("(?<Minus>- )|(?<Object><([^>](?!\\s)){0,}(?=>).)|(?<Quotes>'[^']{0,}.)|(?<Identifiers>(\\w|::)+)|(?<Symbols>[^\\w\\d\\s'][^\\w\\d\\s']{0,})");
+		const boost::regex test_regex("(?<Header>^[\\w;]{0,} {0,}(?=;).)|(?<Minus>- )|(?<Object><:.+(?=:>)..)|(?<Digits>[\\d\\.]+)|(?<Quotes>'[^']+.)|(?<Identifiers>(\\w|::)+)|(?<Symbols>[^\\w\\d\\s'\\.][^\\w\\d\\s'\\.:]{0,})");
+		
+		boost::smatch what;
+		std::vector<std::string> results;
+		while (boost::regex_search(start, end, what, test_regex))
+		{
+			results.push_back(what[0]);
+			start = what[0].second;
+		}
+
+		if (results.size()) 
+		{
+			logger::info("Function: {}", func);
+		
+			for (auto& str : results)
+			{
+				logger::info("{}", str);
+
+			}
+		}
+		
+		
 		logger::info("Testing Types, {}", TestFunc_Type());
 
 		exportMap["AffectActorValue"] = AffectActorValue;
@@ -1946,8 +2222,8 @@ SKSEPluginLoad(const LoadInterface* skse) {
 	InitializeLogging();
 
     auto* plugin = PluginDeclaration::GetSingleton();
-    auto version = plugin->GetVersion();
-    log::info("{} {} is loading...", plugin->GetName(), version);
+	_currentVersion = plugin->GetVersion();
+    log::info("{} {} is loading...", plugin->GetName(), _currentVersion);
 
 
     Init(skse);

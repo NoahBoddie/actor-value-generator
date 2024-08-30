@@ -6,8 +6,13 @@
 #define IF_FORM(mc_form_type) if constexpr (std::is_same_v<FormType, mc_form_type>)
 #define IF_LIKE_FORM(mc_form_type) if constexpr (std::derived_from<FormType, mc_form_type>)
 
+//#define RightActorValue() pad74
+//#define LeftActorValue() pad84
+
+
+
 #ifdef USE_UNSTABLE_TYPES
-#define UNSTABLE_FORM_TYPES, RE::BGSMusicTrackFormWrapper
+#define UNSTABLE_FORM_TYPES, RE::BGSMusicTrackFormWrapper, RE::BGSStoryManagerNodeBase
 #else
 #define UNSTABLE_FORM_TYPES
 #endif
@@ -16,7 +21,7 @@
 	RE::BGSPerk, \
 	RE::EffectSetting, RE::SpellItem, RE::AlchemyItem, RE::EnchantmentItem, RE::IngredientItem, \
 	RE::TESFaction, RE::TESTopicInfo, RE::TESIdleForm, RE::BGSCameraPath, RE::BGSMessage, RE::TESLoadScreen, RE::BGSConstructibleObject, \
-	RE::TESPackage, RE::BGSStoryManagerNodeBase, RE::BGSScene, RE::TESObjectWEAP UNSTABLE_FORM_TYPES
+	RE::TESPackage, RE::BGSScene, RE::TESObjectWEAP UNSTABLE_FORM_TYPES
 
 namespace AVG
 {
@@ -47,6 +52,7 @@ namespace AVG
 
 		inline static HMODULE KID{ nullptr };
 
+		inline static std::map<RE::FormType, std::set<RE::TESForm*>> unrepresentedForms;
 
 		static auto* GetSingleton()
 		{
@@ -69,14 +75,14 @@ namespace AVG
 		}
 
 		//move me plz thx
-		static void HandleCondition(RE::TESCondition& condition, RE::TESForm* form, bool& change)
+		static void HandleCondition(RE::TESCondition& condition, RE::TESForm* form, int& change_num)
 		{
 			if (!form) {
 				return;
 			}
 
 			RE::TESConditionItem* item = condition.head;
-
+			logger::info("~{:X}", (uintptr_t)item);
 			while (item != nullptr) {
 				RE::FUNCTION_DATA& function_data = item->data.functionData;
 
@@ -91,11 +97,17 @@ namespace AVG
 					//logger::info("THRILL, {}", function_data.params[0]);
 				{
 					VoidCaster<RE::ActorValue> stored_av = function_data.params[0];
+					
+
+					//if (log)
+					//	logger::debug("AV {} in info", stored_av._b);
+
+					
 					//if (stored_av._b > RE::ActorValue::kTotal || (int)stored_av._b < 0)
 					//	logger::debug("processing {} form type {}, with a value of {}", form->GetName(), (int)form->GetFormType(), (int)stored_av._b);
 
 
-					stored_av = ValueAliasHandler::AliasToValue(stored_av, form, change);
+					stored_av = ValueAliasHandler::AliasToValue(stored_av, form, change_num);
 					function_data.params[0] = stored_av;
 					
 					//if (reinterpret_cast<uintptr_t>(function_data.params[0]) == static_cast<uintptr_t>(RE::ActorValue::kVariable01)) {
@@ -110,10 +122,10 @@ namespace AVG
 		}
 		
 		template<std::derived_from<RE::TESForm> FormType>
-		static bool ProcessForm(FormType* form)
+		static int ProcessForm(FormType* form)
 		{
 			//I'd like to use this as a helper to see how many forms are processed.
-			bool success = false;
+			int successes = 0;
 
 
 			IF_FORM(RE::EffectSetting)
@@ -126,25 +138,25 @@ namespace AVG
 				switch (effect_data.archetype)
 				{
 				case Archetype::kDualValueModifier:
-					effect_data.secondaryAV = ValueAliasHandler::AliasToValue(effect_data.secondaryAV, form, AliasQuerySettings::RequireSetting, success);
+					effect_data.secondaryAV = ValueAliasHandler::AliasToValue(effect_data.secondaryAV, form, successes, AliasQuerySettings::RequireSetting);
 					[[fallthrough]];
-
+				//Forgot accumulating.
 				case Archetype::kValueModifier:
 				case Archetype::kPeakValueModifier:
-					effect_data.primaryAV = ValueAliasHandler::AliasToValue(effect_data.primaryAV, form, AliasQuerySettings::RequireSetting, success);
+					effect_data.primaryAV = ValueAliasHandler::AliasToValue(effect_data.primaryAV, form, successes, AliasQuerySettings::RequireSetting);
 					[[fallthrough]];
 				default:
-					effect_data.resistVariable = ValueAliasHandler::AliasToValue(effect_data.resistVariable, form, AliasQuerySettings::AllowNone, success);
+					effect_data.resistVariable = ValueAliasHandler::AliasToValue(effect_data.resistVariable, form, successes, AliasQuerySettings::AllowNone);
 					break;
 				}
 
-				HandleCondition(form->conditions, form, success);
+				HandleCondition(form->conditions, form, successes);
 			} 
 			else IF_FORM(RE::BGSPerk)
 			{
 				using PerkEntryFunction = RE::BGSEntryPointPerkEntry::EntryData::Function;
 					
-				HandleCondition(form->perkConditions, form, success);
+				HandleCondition(form->perkConditions, form, successes);
 				
 				for (auto& entry : form->perkEntries)
 				{
@@ -153,9 +165,14 @@ namespace AVG
 					}
 
 					RE::BGSEntryPointPerkEntry* entry_point = skyrim_cast<RE::BGSEntryPointPerkEntry*>(entry);
-
+					//*
+					if (!entry_point) {
+						logger::warn("No entry point in {} at {:08X}", form->GetName(), form->GetFormID());
+						continue;
+					}
+					//*/
 					for (auto& condition : entry_point->conditions) {
-						HandleCondition(condition, form, success);
+						HandleCondition(condition, form, successes);
 					}
 
 
@@ -176,7 +193,7 @@ namespace AVG
 					if (!function_data)
 						continue;
 
-					RE::ActorValue new_av = ValueAliasHandler::AliasToValue(static_cast<RE::ActorValue>(function_data->data1), form, success);
+					RE::ActorValue new_av = ValueAliasHandler::AliasToValue(static_cast<RE::ActorValue>(function_data->data1), form, successes);
 					
 					function_data->data1 = static_cast<float>(new_av);
 					
@@ -186,35 +203,36 @@ namespace AVG
 			{
 				//Simple, but the condition is tucked away
 				if (form->vendorData.vendorConditions)
-					HandleCondition(*form->vendorData.vendorConditions, form, success);
+					HandleCondition(*form->vendorData.vendorConditions, form, successes);
 			}
 			else IF_FORM(RE::TESTopicInfo)
 			{
 				//Simple
-				HandleCondition(form->objConditions, form, success);
+				HandleCondition(form->objConditions, form, successes);
 			}
 			else IF_FORM(RE::TESIdleForm)
 			{
 				//simple
-				HandleCondition(form->conditions, form, success);
+				HandleCondition(form->conditions, form, successes);
 			}
 			else IF_FORM(RE::BGSCameraPath)
 			{
 				//simple
-				HandleCondition(form->conditions, form, success);
+				HandleCondition(form->conditions, form, successes);
 			}
 			else IF_FORM(RE::BGSMessage)
 			{
 				//Needs to iterate through the button entries, make sure to null check first, they are optional
 				for (auto& button : form->menuButtons) {
 					if (button)
-						HandleCondition(button->conditions, form, success);
+						HandleCondition(button->conditions, form, successes);
 				}
 			}
 			else IF_FORM(RE::TESObjectWEAP)
 			{
 				auto& weapon_data = form->weaponData;
-				weapon_data.resistance = ValueAliasHandler::AliasToValue(*weapon_data.resistance, form, AliasQuerySettings::AllowNone, success);
+				weapon_data.resistance = ValueAliasHandler::AliasToValue(*weapon_data.resistance, form, successes,
+					AliasQuerySettings::AllowNone);
 				//weapon_data.skill = ValueAliasHandler::AliasToValue(*weapon_data.skill, form);//Disabled for now
 				
 				//Embed isn't used so maybe not needed. But just in case someone does have something of the like.
@@ -223,12 +241,12 @@ namespace AVG
 			else IF_FORM(RE::TESLoadScreen)
 			{
 				//standard
-				HandleCondition(form->conditions, form, success);
+				HandleCondition(form->conditions, form, successes);
 			}
 			else IF_FORM(RE::BGSConstructibleObject)
 			{
 				//pretty standard
-				HandleCondition(form->conditions, form, success);
+				HandleCondition(form->conditions, form, successes);
 			}
 			else IF_FORM(RE::TESQuest)
 			{
@@ -237,18 +255,18 @@ namespace AVG
 			else IF_FORM(RE::TESPackage)
 			{
 				//This takes a fuck ton of conditions, templating might negate some of that so beware?
-				HandleCondition(form->packConditions, form, success);
+				HandleCondition(form->packConditions, form, successes);
 				//There's more, but I've yet to have the ability to handle that.
 			}
 			else IF_FORM(RE::BGSStoryManagerNodeBase)
 			{
 				//Seems to be the core
-				HandleCondition(form->conditions, form, success);
+				HandleCondition(form->conditions, form, successes);
 			}
 			else IF_FORM(RE::BGSScene)
 			{
 				//Has more than one, and may need to iterate.
-				HandleCondition(form->conditions, form, success);
+				HandleCondition(form->conditions, form, successes);
 			}
 			else IF_FORM(RE::BGSSoundDescriptorForm)
 			{
@@ -257,15 +275,65 @@ namespace AVG
 			else IF_FORM(RE::BGSMusicTrackFormWrapper)
 			{
 				//Check all
-				HandleCondition(form->track->conditions, form, success);
+				HandleCondition(form->track->conditions, form, successes);
 			}
 			else IF_LIKE_FORM(RE::MagicItem)
 			{
 				//Iterate through and handle conditions.
 				//At a time later it will also need patching with skill use data.
 				for (auto& effect : form->effects) {
-					HandleCondition(effect->conditions, form, success);
+					HandleCondition(effect->conditions, form, successes);
 				}
+
+#ifndef _DEBUG
+				return successes;
+#endif
+
+				//RE::MagicItem* magic = nullptr;
+				//I would like something where you can use a keyword to control the primary alias, then from there it searches the costliest
+				//Secondarily, I would like this to be able to do something where it can search the spell itself for keywords.
+				RE::Effect* effect_item = form->GetCostliestEffectItem();
+				
+				if (!effect_item)
+					return successes;
+
+				RE::EffectSetting* cost_effect = effect_item->baseEffect;
+
+				constexpr bool is_enchant = std::is_same_v<FormType, RE::EnchantmentItem>;
+				constexpr bool is_spell = std::is_same_v<FormType, RE::SpellItem>;
+				//GetActorValueForCost
+
+				if constexpr (is_enchant || is_spell)
+				{
+					constexpr RE::ActorValue right_expect = is_enchant ? RE::ActorValue::kRightItemCharge : RE::ActorValue::kMagicka;
+					constexpr RE::ActorValue left_expect = is_enchant ? RE::ActorValue::kLeftItemCharge : RE::ActorValue::kMagicka;
+
+					RE::ActorValue right_hand;
+					RE::ActorValue left_hand;
+
+					if constexpr (is_enchant) {
+						if (form->GetCastingType() == RE::MagicSystem::CastingType::kConstantEffect)
+							return successes;
+						//RequireSetting
+						right_hand = ValueAliasHandler::AliasToValue(RE::ActorValue::kRightItemCharge, cost_effect, successes,
+							AliasQuerySettings::IgnorePlugin, AliasQuerySettings::RequireCost);
+						left_hand = ValueAliasHandler::AliasToValue(RE::ActorValue::kLeftItemCharge, cost_effect, successes,
+							AliasQuerySettings::IgnorePlugin, AliasQuerySettings::RequireCost);
+					}
+					else {
+						right_hand = ValueAliasHandler::AliasToValue(RE::ActorValue::kMagicka, cost_effect, successes,
+							AliasQuerySettings::IgnorePlugin, AliasQuerySettings::RequireCost);
+						left_hand = right_hand;
+					}
+					
+					if (right_hand != right_expect)
+						form->pad74 = static_cast<uint32_t>(right_hand);
+
+					if (left_hand != left_expect)
+						form->pad84 = static_cast<uint32_t>(left_hand);
+				}
+				
+				//form->GetSkillUsageData(SkillUsageData & a_data)
 			}
 			else {
 				static bool shown = false;
@@ -278,7 +346,7 @@ namespace AVG
 
 			//BGSStandardSoundDef This is conditioned, but not seemingly used.
 
-			return success;
+			return successes;
 		}
 
 	
@@ -300,19 +368,64 @@ namespace AVG
 				"st" : I_remain == 2 ?
 				"nd" : I_remain == 3 ?
 				"rd" : "th";
+			constexpr std::array<std::string_view, 2> _y{ "y", "ies" };
+			constexpr std::array<std::string_view, 2> _s{ "", "s" };
 
+			//Add process count here
 			logger::info("Starting {}{} process '{}'...", I, _th, typeid(FormType).name());
 
-			size_t process_count = 0;
-
-			for (RE::TESForm* form : form_array) {
-				FormType* true_form = form->As<FormType>();
-				
-				if (true_form)
-					process_count += ProcessForm(true_form);
-			}
+			size_t form_count = 0;
+			size_t entry_count = 0;
 			
-			logger::info("'{}' complete, {} entr{} processed.", typeid(FormType).name(), process_count, process_count == 1 ? "y": "ies");
+			size_t list_size = form_array.size();
+
+
+			if (list_size)
+			{
+				for (RE::TESForm* form : form_array) {
+					FormType* true_form = form->As<FormType>();
+
+					if (true_form) {
+						size_t process_count = ProcessForm(true_form);
+
+						form_count += process_count != 0;
+						entry_count += process_count;
+					}
+				}
+			}
+			else
+			{
+				logger::warn("Native form array for {} is empty. Using custom count.", typeid(FormType).name());
+
+				auto it = unrepresentedForms.find(FormType::FORMTYPE);
+
+				if (unrepresentedForms.end() != it)
+				{
+					list_size = it->second.size();
+					
+					for (RE::TESForm* form : it->second) {
+						FormType* true_form = form->As<FormType>();
+
+						if (true_form) {
+							size_t process_count = ProcessForm(true_form);
+
+							form_count += process_count != 0;
+							entry_count += process_count;
+						}
+					}
+				}
+				else {
+					logger::warn("No custom cache found.");
+				}
+
+
+			}
+			//I'd like to change this from just entries to avs changed.
+			logger::info("'{}' complete\n Processed {} form{} and {} entr{}, of {} total.", 
+				typeid(FormType).name(), 
+				form_count, _s[form_count != 1], 
+				entry_count, _y[entry_count != 1],
+				list_size);
 
 			if constexpr (I > 0)
 				NthProcess<I - 1, PatchTypes...>(handler);
@@ -330,6 +443,10 @@ namespace AVG
 			else {
 				logger::error("Error occured, FormExtraValueHandler::Initialize failed to get RE::TEDataHandler.");
 			}
+
+			//There's a lot of forms in this, so you may want to clear it.
+			unrepresentedForms.clear();
+
 			return data_handler;
 		}
 
@@ -360,6 +477,15 @@ namespace AVG
 		
 
 			logger::info("KID found, will initialize on after ModEvent.");
+		}
+
+
+		static void AddUnrepresentedForm(RE::TESForm* form)
+		{
+			if (!form)
+				return;
+
+			unrepresentedForms[*form->formType].emplace(form);
 		}
 
 

@@ -479,7 +479,7 @@ namespace AVG
 			return _endTypeIndex[type];
 		}
 
-		static inline uint32_t GetBeginIndex(ExtraValueType type)
+		static inline DataID GetBeginIndex(ExtraValueType type)
 		{
 			switch (type)
 			{
@@ -596,7 +596,10 @@ namespace AVG
 	public:
 		virtual DataID		GetDataID() = 0;
 		ValueID				GetValueID() { return int(RE::ActorValue::kTotal) + 1 + GetBeginIndex(GetType()) + _valueIDOffset; }
+		ValueID				GetOffset() { return _valueIDOffset; }
+		//I'd really like to convert these to clean old string_views that share
 		std::string			GetName() { return valueName; }
+		const char*			GetCName() { return valueName.c_str(); }
 		RE::BSFixedString	GetFixedName() { return RE::BSFixedString(valueName.c_str()); }
 		RE::ActorValue		GetValueIDAsAV() { return static_cast<RE::ActorValue>(GetValueID()); }
 
@@ -871,10 +874,14 @@ namespace AVG
 			return;
 		logger::debug("CONTEXT {}", data.export_context[0]);
 
-		RE::ActorValue av = Utility::StringToActorValue(data.export_context[0]);
+
+		ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByName(data.export_context[0]);
+
+		RE::ActorValue av = info ? info->GetValueIDAsAV() : Utility::StringToActorValue(data.export_context[0]);;
 
 		if (av == RE::ActorValue::kTotal)
 			return;
+
 		logger::debug("AV {}", (int)av);
 
 
@@ -970,7 +977,12 @@ namespace AVG
 				ExportInfo& info = _set[data.av_modifier][i];
 
 				if (info) {
-					data.export_context = info.context;
+					std::vector<const char*> context(info.context.size());
+
+					std::transform(info.context.begin(), info.context.end(), context.begin(),
+						[](std::string& str) { return str.c_str(); });
+
+					data.export_context = context;
 					info.function(data);
 				}
 
@@ -986,6 +998,9 @@ namespace AVG
 
 		ExtraValueInput GetFlags() const { return _getFlags; }
 		ExtraValueInput SetFlags() const { return _setFlags; }
+
+		//This isn't quite right though//Needs more than just damage.
+		virtual bool AllowsSetting() override { return SetFlags(); }
 
         float GetExtraValue(RE::Actor* target, ExtraValueInput value_types = ExtraValueInput::All) override
 		{
@@ -1022,7 +1037,7 @@ namespace AVG
 			if (_set[modifier].size() == 0)
 				return false;
 
-			ExportSetData data(target, GetValueIDAsAV(), GetName(), modifier, value);
+			ExportSetData data(target, GetValueIDAsAV(), GetCName(), modifier, value);
 
 			HandleSetExport(data);
 
@@ -1035,8 +1050,9 @@ namespace AVG
 			ExportFunction func = nullptr;
 
 			//For there to be a set there, there must be a coresponding get function
-			if (!(ModifierToValueInput(mod) & _getFlags))
-				return false;
+			//Actually, rule removed.
+			//if (!(ModifierToValueInput(mod) & _getFlags))
+			//	return false;
 
 			//For there to be a set, there must be a get. Note that.
 			if (function_name == "")
@@ -1069,13 +1085,13 @@ namespace AVG
 				return false;
 			}
 
-			if (!_get[modifier]) {
-				return false;
-			}
+			//if (!_get[modifier]) {
+			//	return false;
+			//}
 			
-			float current = _get[modifier]->RunImpl(target);
+			float current = _get[modifier] ? _get[modifier]->RunImpl(target) : 0;
 			
-			ExportSetData data(target, aggressor, GetValueIDAsAV(), GetName(), modifier, current + value, current);
+			ExportSetData data(target, aggressor, GetValueIDAsAV(), GetCName(), modifier, current + value, current);
 
 			HandleSetExport(data);
 

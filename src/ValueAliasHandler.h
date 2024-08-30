@@ -86,7 +86,7 @@ namespace AVG
 			index(alias == RE::ActorValue::kNone ? AliasByteRequirement - 1 : (uint32_t(alias) / 8)),
 			alias_bit(alias == RE::ActorValue::kNone ? 0b10000000 : (1 << uint32_t(alias) % 8))
 		{
-			logger::debug("Made of {} -> {} / {:08B}", (int)alias, index, alias_bit);
+			//logger::debug("Made of {} -> {} / {:08B}", (int)alias, index, alias_bit);
 		}
 
 
@@ -99,7 +99,7 @@ namespace AVG
 
 			alias_bit = none ? 0b10000000 : (1 << alias_num % 8);
 
-			logger::info("debug of {} -> {} / {:08B}", (int)alias, index, alias_bit);
+			//logger::info("debug of {} -> {} / {:08B}", (int)alias, index, alias_bit);
 		}
 	};
 
@@ -107,12 +107,31 @@ namespace AVG
 
 	struct AliasSetting
 	{
+		//It's invalid if it looks like this.
+		ExtraValueType _type = ExtraValueType::Total;
+		ValueID _offset = ExtraValueInfo::FunctionalID;
+		std::string _name;//Might be more accurate.
+		
 		ExtraValueInfo* extraValue;
 		AliasSettingFlag flag;
 
+		operator RE::ActorValue() const
+		{
+			ValueID base = _offset;
+
+			if (_type != ExtraValueType::Total)
+				base += 165 + ExtraValueInfo::GetBeginIndex(_type);
+
+			return static_cast<RE::ActorValue>(base);
+		}
+
 		operator bool() const { return extraValue != nullptr; }
+		//operator bool() const { return _offset != ExtraValueInfo::FunctionalID; }
+		
 		AliasSetting() = default;
-		AliasSetting(ExtraValueInfo* ev, AliasSettingFlag f) : extraValue(ev), flag(f) {}
+		AliasSetting(ExtraValueInfo* ev, AliasSettingFlag f) : extraValue(ev), flag(f) {}//Can redesign this to get the offset.
+		AliasSetting(ExtraValueType t, ValueID o, AliasSettingFlag f) : _type(t), _offset(o), flag(f) {}
+		AliasSetting(ExtraValueType t, ValueID o, std::string n, AliasSettingFlag f) : _type(t), _offset(o), _name{n}, flag(f) {}
 	};
 	
 	/*//This is a different version that I'm unsure if I wish to do at this moment.
@@ -161,9 +180,26 @@ namespace AVG
 		}
 	};
 
+	ENUM(AliasType)
+	{
+		GetMask,
+		SetMask,
+		CostMask,
+		Total
+	};
+	
+	//probably wont use.
+	ENUM(SpecialAlias)
+	{
+		None,
+		Cost,
+	};
 
+
+	inline AliasMask globalAliases[AliasType::Total];
 
 	inline AliasMask allAliases;
+	//inline AliasMask allCostAliases;
 	inline AliasMask allSetAliases;
 
 	struct PluginAliasNode
@@ -172,14 +208,80 @@ namespace AVG
 		//std::string plugin_name;
 		//ExtraValueInfo* avAliasArray[RE::ActorValue::kTotal];
 		//RE::TESFile* plugin = nullptr;//This isn't required
-
+		
+		//AliasMask costAliases{};
 		AliasMask filledAliases{};
 		AliasMask setableAliases{};
 
-		//Used to be std::map, kept crashing so now it's unordered_map. No fucking clue why but it's probably for the better.
-		std::unordered_map<RE::ActorValue, AliasSetting> actorValueAliases{};
+		AliasMask localAliases[AliasType::Total];
 
-		bool AddSetting(RE::ActorValue alias, ExtraValueInfo* value, AliasSettingFlag flags)
+		template <class T, class K, class V>
+		using map_of_maps = std::unordered_map<T, std::unordered_map<K, V>>;
+
+		map_of_maps<SpecialAlias, RE::ActorValue, AliasSetting> aliasDataMap;//I'm running out of names, I'm a shit programmer.
+		std::unordered_map<RE::ActorValue, AliasSetting>& actorValueAliases = aliasDataMap[SpecialAlias::None];
+
+
+
+		//Used to be std::map, kept crashing so now it's unordered_map. No fucking clue why but it's probably for the better.
+		//std::unordered_map<RE::ActorValue, AliasSetting> actorValueAliases{};
+
+		bool AddSettingTest(RE::ActorValue alias, ExtraValueType type, ValueID offset, std::string name, ExtraValueInfo* info, 
+			SpecialAlias spec_type = SpecialAlias::None, AliasSettingFlag flags = AliasSettingFlag::None)
+		{
+
+			if (alias == RE::ActorValue::kTotal) {
+				logger::error("Alias type invalid.");
+				return false;
+			}
+			AliasSetting& setting = aliasDataMap[spec_type][alias];
+			//AliasSetting& setting = actorValueAliases[alias];//  alias == RE::ActorValue::kNone ? actorValueAliases[RE::ActorValue::kAggression] : actorValueAliases[alias];
+
+			if (setting) {
+				logger::warn("Value Alias {} for {} is being overriden by {}", (int)alias, setting._name, name);
+			}
+			//logger::info("address {:X}", (uint64_t)this);
+
+			setting = AliasSetting(type, offset, name, flags);
+
+			//aliasDataMap[spec_type][alias] = setting;
+
+			AliasFlag flag(alias);
+
+
+			if (spec_type == SpecialAlias::None)
+			{
+				localAliases[AliasType::GetMask][flag.index] |= flag.alias_bit;
+				globalAliases[AliasType::GetMask][flag.index] |= flag.alias_bit;
+
+				if (!info || info->AllowsSetting() == true) {
+					localAliases[AliasType::SetMask][flag.index] |= flag.alias_bit;
+					globalAliases[AliasType::SetMask][flag.index] |= flag.alias_bit;
+				}
+
+			}
+			else
+			{
+				if (!info || info->AllowsSetting() == true) {
+					localAliases[AliasType::CostMask][flag.index] |= flag.alias_bit;
+					globalAliases[AliasType::CostMask][flag.index] |= flag.alias_bit;
+				}
+
+			}
+			
+			logger::debug("testing alias bit for {}, index: {}, bit: {:B}", name, flag.index, flag.alias_bit);
+
+
+
+			return true;
+		}
+
+		bool AddSetting_(RE::ActorValue alias, ExtraValueInfo* value, AliasSettingFlag flags, SpecialAlias spec_type = SpecialAlias::None)
+		{
+			return AddSettingTest(alias, value->GetType(), value->GetOffset(), value->GetName(), value, spec_type, flags);
+		}
+
+		bool AddSetting(RE::ActorValue alias, ExtraValueInfo* value, AliasSettingFlag flags, SpecialAlias spec_type = SpecialAlias::None)
 		{
 			//if (alias == RE::ActorValue::kNone) {
 			//	logger::error("Alias cannot be None.");
@@ -190,9 +292,8 @@ namespace AVG
 				logger::error("Alias type invalid.");
 				return false;
 			}
-
-			//AGGRESSIONSSSS
-			AliasSetting& setting = actorValueAliases[alias];//  alias == RE::ActorValue::kNone ? actorValueAliases[RE::ActorValue::kAggression] : actorValueAliases[alias];
+			AliasSetting& setting = aliasDataMap[spec_type][alias];
+			//AliasSetting& setting = actorValueAliases[alias];//  alias == RE::ActorValue::kNone ? actorValueAliases[RE::ActorValue::kAggression] : actorValueAliases[alias];
 
 			if (setting) {
 				logger::warn("Value Alias {} for {} is being overriden by {}", (int)alias, setting.extraValue->GetName(), value->GetName());
@@ -200,10 +301,31 @@ namespace AVG
 			//logger::info("address {:X}", (uint64_t)this);
 
 			setting = AliasSetting(value, flags);
-
-
 			
+			//aliasDataMap[spec_type][alias] = setting;
 
+			AliasFlag flag(alias);
+
+
+			if (spec_type == SpecialAlias::None)
+			{
+				localAliases[AliasType::GetMask][flag.index] |= flag.alias_bit;
+				globalAliases[AliasType::GetMask][flag.index] |= flag.alias_bit;
+				
+				if (value->AllowsSetting() == true) {
+					localAliases[AliasType::SetMask][flag.index] |= flag.alias_bit;
+					globalAliases[AliasType::SetMask][flag.index] |= flag.alias_bit;
+				}
+
+			}
+			else
+			{
+				if (value->AllowsSetting() == true) {
+					localAliases[AliasType::CostMask][flag.index] |= flag.alias_bit;
+					globalAliases[AliasType::CostMask][flag.index] |= flag.alias_bit;
+				}
+				
+			}
 			//return;
 			/*
 			uint32_t alias_num = static_cast<uint32_t>(alias);
@@ -223,10 +345,11 @@ namespace AVG
 
 			/*/
 
-			AliasFlag flag(alias);
-
-			filledAliases[flag.index] |= flag.alias_bit;
 			
+			//*/
+			
+			filledAliases[flag.index] |= flag.alias_bit;
+
 			if (value->AllowsSetting() == true) {
 				setableAliases[flag.index] |= flag.alias_bit;
 				allSetAliases[flag.index] |= flag.alias_bit;
@@ -234,13 +357,12 @@ namespace AVG
 			allAliases[flag.index] |= flag.alias_bit;
 
 			logger::debug("testing alias bit for {}, index: {}, bit: {:B}", value->GetName(), flag.index, flag.alias_bit);
-			//*/
-			
 
 
 
 			return true;
 		}
+
 
 		bool IsAliasValidSafe(RE::ActorValue alias, bool requires_set)
 		{
@@ -249,11 +371,16 @@ namespace AVG
 			
 			AliasFlag flag(alias);
 
-			if (filledAliases.HasAlias(flag) == false)
+			AliasType type = requires_set ? AliasType::SetMask : AliasType::GetMask;
+
+			if (localAliases[type].HasAlias(flag) == false)
 				return false;
 
-			if (requires_set && setableAliases.HasAlias(flag) == false)
-				return false;
+			//if (filledAliases.HasAlias(flag) == false)
+			//	return false;
+
+			//if (requires_set && setableAliases.HasAlias(flag) == false)
+			//	return false;
 
 			return true;
 		}
@@ -268,6 +395,8 @@ namespace AVG
 
 	PluginAliasNode* GetPluginAlias(RE::TESFile* plugin)
 	{
+		RE::Actor* a = nullptr;
+
 		if (!plugin)
 			return nullptr;
 
@@ -438,7 +567,9 @@ namespace AVG
 		None = 0,
 		AllowNone = 1 << 0,
 		RequireSetting = 1 << 1,
-
+		RequireCost = 1 << 2,
+		IgnoreKeyword = 1 << 3,
+		IgnorePlugin = 1 << 4,
 
 	};
 
@@ -446,10 +577,30 @@ namespace AVG
 	{
 		//I want this to have 2 forms, one that takes keyword forms, then one that takes regular forms. OR, make it a concept so
 		// I can switch it.
-		static RE::ActorValue AliasToValue(RE::ActorValue alias, RE::TESForm* form, AliasQuerySettings settings, bool& changed)
+
+
+		//I would like to switch the 2 of these, that way I can make a parameter pack.
+		static RE::ActorValue AliasToValue(RE::ActorValue alias, RE::TESForm* form, int& change_num, AliasQuerySettings settings)
 		{
 			bool requires_setting = settings & AliasQuerySettings::RequireSetting;
 			bool allow_none = settings & AliasQuerySettings::AllowNone;
+
+			bool ignore_keyword = settings & AliasQuerySettings::IgnoreKeyword;
+			bool ignore_plugin = settings & AliasQuerySettings::IgnorePlugin;
+
+			AliasType mask_type = AliasType::GetMask;
+			SpecialAlias spec_type = SpecialAlias::None;
+			cycle_switch(settings)
+			{
+				case AliasQuerySettings::RequireSetting:
+					mask_type = AliasType::SetMask;
+					goto break_settings;
+
+				case AliasQuerySettings::RequireCost:
+					mask_type = AliasType::CostMask;
+					spec_type = SpecialAlias::Cost;
+					goto break_settings;
+			}
 
 			if (!form)
 				return alias;
@@ -464,20 +615,30 @@ namespace AVG
 			
 			AliasFlag flag = alias;
 
+			if (globalAliases[mask_type].HasAlias(flag) == false) {
+				//logger::debug("Alias for {} not implementing.", (int)alias);
+				
+				return alias;
+			}
+			
+
 			//Move back to the consideration, I change my mind, this has no place here.
 			if (allAliases.HasAlias(flag) == false) {
 				//if (alias == RE::ActorValue::kNone)
 				//	logger::info("Alias for {} not implementing.", (int)alias);
-				return alias;
+				////return alias;
 			}
 
 			if (requires_setting && allSetAliases.HasAlias(flag) == false) {
-				logger::warn("Alias for {} not able to be set.", (int)alias);
-				return alias;
+				////logger::warn("Alias for {} not able to be set.", (int)alias);
+				////return alias;
 			}
 			//logger::info("D");
 
-			PluginAliasNode* plugin_alias = GetKeywordNode(form->As<RE::BGSKeywordForm>(), alias, requires_setting);
+			PluginAliasNode* plugin_alias = nullptr;
+			
+			if (!ignore_keyword)
+				plugin_alias = GetKeywordNode(form->As<RE::BGSKeywordForm>(), alias, requires_setting);
 
 			//This is NOT supposed to happen here.
 			//if (!plugin_alias)
@@ -485,7 +646,8 @@ namespace AVG
 
 
 			//logger::info("C {}", plugin_alias != nullptr);
-			plugin_alias = plugin_alias ? plugin_alias : GetNode(source_array, alias, requires_setting);
+			if (!ignore_plugin && !plugin_alias)
+				plugin_alias = GetNode(source_array, alias, requires_setting);
 
 			//For this shit to fix this, a severe issue has taken root. I need to address whatever is determining
 			// it "HAS FLAGS" when it comes through. Likely due to the keyword if I had to guess.
@@ -522,7 +684,8 @@ namespace AVG
 
 
 			//I believe this may have returned and started crashing again, SOME how.
-			ExtraValueInfo* info = plugin_alias->actorValueAliases[alias].extraValue;
+			ExtraValueInfo* info = plugin_alias->aliasDataMap[spec_type][alias].extraValue;//->actorValueAliases[alias].extraValue;
+			//ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(plugin_alias->aliasDataMap[spec_type][alias]);//->actorValueAliases[alias].extraValue;
 			
 			//logger::info("A");
 			
@@ -534,23 +697,38 @@ namespace AVG
 
 			RE::ActorValue result = info->GetValueIDAsAV();
 
-			changed = true;
+			change_num++;
 
 		end:
-			//logger::info("Actor Value {} has been converted into Extra Value {}.", (int)alias, (int)result);
+			logger::info("Actor Value {} has been converted into Extra Value {} for {:08X}.", (int)alias, (int)result, form->formID);
 
 			return result;
 		}
-
-		static inline RE::ActorValue AliasToValue(RE::ActorValue alias, RE::TESForm* form, AliasQuerySettings settings)
+		
+		//This needs a better restriction. this don't cut it.
+		template <class... AQS>//requires(std::is_same_v<AQS..., AliasQuerySettings>)
+		static inline RE::ActorValue AliasToValue(RE::ActorValue alias, RE::TESForm* form, int& change_num, AQS... aqs)
 		{
-			bool dump = false;
-			return AliasToValue(alias, form, settings, dump);
+			std::array<AliasQuerySettings, sizeof...(AQS)> settings{ aqs... };
+
+			AliasQuerySettings combined_settings = AliasQuerySettings::None;
+
+			std::for_each(settings.begin(), settings.end(), [&](auto it) {combined_settings |= it; });
+
+			return AliasToValue(alias, form, change_num, combined_settings);
 		}
 
-		static inline RE::ActorValue AliasToValue(RE::ActorValue alias, RE::TESForm* form, bool& changed)
+		static inline RE::ActorValue AliasToValue(RE::ActorValue alias, RE::TESForm* form, int& change_num)
 		{
-			return AliasToValue(alias, form, AliasQuerySettings::None, changed);
+			return AliasToValue(alias, form, change_num, AliasQuerySettings::None);
+		}
+
+		template <class... AQS>//requires(std::is_same_v<AQS..., AliasQuerySettings>)
+		static inline RE::ActorValue AliasToValue(RE::ActorValue alias, RE::TESForm* form, AQS... aqs)
+		{
+			int dump = false;
+		
+			return AliasToValue(alias, form, dump, aqs...);
 		}
 	};
 }

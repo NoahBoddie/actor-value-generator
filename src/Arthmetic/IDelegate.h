@@ -50,7 +50,7 @@ namespace Arthmetic
 			//This will have to work for now, but I'd like a different way to handle this.
 			std::string code{ it->view };
 
-			bool end = !!(it->type & DataType::LastEntry);
+			bool ending = !!(it->type & DataType::LastEntry);
 
 			DataType type = it->GetType();
 
@@ -85,22 +85,25 @@ namespace Arthmetic
 
 				//If something can make it through this test without sending back an error, said thing sure to be in some part
 				// a const able call.
+				if constexpr (false)
+				{
+					logger::info("Testing the routine...");
 
-				logger::info("Testing the routine...");
-				Target target{};
+					Target target{};
 
-				float result = generated_routine->RunImpl(target);//param.GetNumberParam();
+					float result = generated_routine->RunImpl(target);//param.GetNumberParam();
 
-				logger::info("result first is {}", result);
+					logger::info("result first is {}", result);
 
-				result = generated_routine->RunImpl(target);//param.GetNumberParam();
+					result = generated_routine->RunImpl(target);//param.GetNumberParam();
 
-				logger::info("result second is {}", result);
+					logger::info("result second is {}", result);
 
-				result = param.GetNumberParam();
+					result = param.GetNumberParam();
 
-				logger::info("result third is {}", result);
-				//At this point, flag for irrelevancy.
+					logger::info("result third is {}", result);
+					//At this point, flag for irrelevancy.
+				}
 
 
 				params.push_back(param);
@@ -118,7 +121,7 @@ namespace Arthmetic
 				//cout << "(Loading " << value << ")";
 				params.push_back(DelegateArgument(value));
 
-				logger::info("O a {}", end);
+				logger::info("O a {}", ending);
 
 				break;
 			}
@@ -131,7 +134,7 @@ namespace Arthmetic
 
 				params.push_back(DelegateArgument(code));
 
-				logger::info("O b {}", end);
+				logger::info("O b {}", ending);
 
 				break;
 
@@ -160,7 +163,7 @@ namespace Arthmetic
 				throw nullptr;//Currently unknown.
 			}
 			logger::info("O end");
-			return end;
+			return ending;
 		}
 
 		LinkerFlags GetLinkerFlags() const override 

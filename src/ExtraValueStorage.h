@@ -655,9 +655,6 @@ namespace AVG
 			if (_playable)
 				return player_storage;
 
-			
-			logger::info("Unplayable, attempting to make new storage.");
-
 
 			auto player = RE::PlayerCharacter::GetSingleton();
 

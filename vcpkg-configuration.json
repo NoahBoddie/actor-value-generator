@@ -7,11 +7,10 @@
         {
             "kind": "git",
             "repository": "https://gitlab.com/colorglass/vcpkg-colorglass",
-            "baseline": "5051ea1c8131351d23ba44b51b1ac650676f4ad5",
+            "baseline": "6309841a1ce770409708a67a9ba5c26c537d2937",
             "packages": [
                 "bethesda-skyrim-scripts",
                 "commonlibsse-ng",
-                "commonlibsse-ng-flatrim",
                 "script-extender-common",
                 "skse"
             ]

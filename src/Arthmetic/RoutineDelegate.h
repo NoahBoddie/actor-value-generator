@@ -28,7 +28,7 @@ namespace Arthmetic
 			constexpr int space_taker = 0;
 
 			if (IsObject() == true)
-				SetOwner(nullptr, space_taker);
+				SetOwner(nullptr, nullptr, nullptr);
 		}
 
 
@@ -42,7 +42,8 @@ namespace Arthmetic
 
 		Property(std::string& data) : DelegateArgument(CreateDelegateArgument(data, 1))
 		{
-
+			if (IsNumber())
+				logger::debug("PROP TEST {}", GetNumberParam());
 		}
 	};
 

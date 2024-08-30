@@ -634,7 +634,7 @@ symbol_handle:
 
 
 	////////////////
-#ifdef ENABLE_TEST_FIELD
+#ifndef ENABLE_TEST_FIELD
 
 //ENUM(ParsingType)
 	enum ParsingType
@@ -722,7 +722,7 @@ symbol_handle:
 
 	//Some things can only be a primary context, some things can
 
-
+	/*
 	struct NumberContext : public ParsingContext
 	{
 
@@ -753,7 +753,7 @@ symbol_handle:
 		}
 
 	};
-
+	//*/
 
 	struct VariableContext : public ParsingContext
 	{

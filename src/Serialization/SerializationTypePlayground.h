@@ -116,6 +116,7 @@ namespace RGL
 		using MaskType::MaskType;
 		using Alias = ClassAlias;
 
+		//These are in the wrong place
 		ClassAlias() = default;
 		ClassAlias(std::string& a_rhs) { static_cast<Base&>(*this) = a_rhs; }
 		ClassAlias(std::string&& a_rhs) { static_cast<Base&>(*this) = a_rhs; }

@@ -259,8 +259,8 @@ namespace Arthmetic
 
 			if (_finished)
 				logger::info("complete {}" , return_value);
-			else
-				logger::error("NOT Completed.", return_value);
+			//else
+			//	logger::error("NOT Completed.", return_value);
 
 			return return_value;
 		}

@@ -89,8 +89,8 @@ namespace Arthmetic
             case ArgumentType::Number:
             {
                 float value = GetNumberParam(selector);
-                if (switch_value == ArgumentType::Arthmetic)
-                   // logger::info("CALLER, the arthmetic is up, is managing? {} {}", IsManaging(), value);
+                //if (switch_value == ArgumentType::Arthmetic)
+                // logger::info("CALLER, the arthmetic is up, is managing? {} {}", IsManaging(), value);
 
 
                 resolve_param = value;
@@ -336,11 +336,12 @@ namespace Arthmetic
         Target GetObjectParam(TargetSelector* selector = nullptr) const;
         
 
-        bool SetOwner(IDirective* directive, int index);
+        bool SetOwner(IDirective* directive, std::deque<ArthmeticObject*>* owner_stack, ArthmeticObject* owner);//, int index);
 
 
         void TransferData(const DelegateArgument& a_rhs) const
         {
+            //Does this even do anything?
             if (IsManaging() == true){
                 _type |= ArgumentType::Incomplete;
             }
@@ -377,6 +378,11 @@ namespace Arthmetic
 
                 _string = strdup(a_rhs._string);
             }
+            else if (a_rhs._type == ArgumentType::Arthmetic && a_rhs._arthmetic)
+            {
+                _type = ArgumentType::Arthmetic;
+                _arthmetic = a_rhs._arthmetic;
+            }
             else
             {
                 //logger::info("TEST '{}'", _value);
@@ -412,11 +418,12 @@ namespace Arthmetic
             get_switch (GetType())
             {
             case ArgumentType::Arthmetic:
-                logger::debug("query deleting arthmetic, {}", !(flags & ArgumentType::Incomplete), _arthmetic != nullptr);
+                //logger::info("query deleting arthmetic, {} {}", !(flags & ArgumentType::Incomplete), _arthmetic != nullptr);
             if (!(flags & ArgumentType::Incomplete) && _arthmetic != nullptr)
             {
-                logger::info("Deleting arthmetic");
-                delete _arthmetic;
+//#error Disabling arth deletion.
+                //logger::info("Deleting arthmetic at 0x{}", (uintptr_t)_arthmetic);
+                //delete _arthmetic;
             }
             break;
 

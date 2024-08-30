@@ -12,7 +12,7 @@ namespace Arthmetic
 	};
 
 	//Don't want this, this is just to resolve this issue.
-	using FunctionCallback = float(Target, const ArgumentList&);
+	using FunctionCallback = float(Target, const ArgumentList);
 
 	struct FunctionInterface : public IFormula
 	{
@@ -29,11 +29,12 @@ namespace Arthmetic
 
 			try
 			{
-				ArgumentList list(p_list.size());
+				std::vector<SWITCH_ARG*> list(p_list.size());
 				
 				std::transform(p_list.begin(), p_list.end(), list.begin(), 
 					[](DelegateArgument& arg) { return &arg; });
-
+				logger::debug("Send Function {} {}, @ {}", p_list.size(), list.size(), (uintptr_t)&list);
+			
 				result = _callback(target, list);
 			}
 			catch (const InvalidArgError& error)//Not gonna use anything yet.

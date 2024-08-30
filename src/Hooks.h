@@ -720,6 +720,110 @@ namespace AVG
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
+
+
+	struct MagicItemCtorHook
+	{
+		static void Patch()
+		{
+			REL::Relocation<uintptr_t> ctor_hook{ REL::RelocationID { 11171, 11278 }, 0x20 };
+			auto hook_addr = REL::RelocationID(33817, 34609).address();//SE: 0x1004C0 , AE: 0x10C140, VR: ???
+
+			auto& trampoline = SKSE::GetTrampoline();
+
+			func = trampoline.write_call<5>(ctor_hook.address(), thunk);
+
+			logger::info("MagicItemCtor Hook complete...");
+			//*/
+		}
+
+		static RE::TESBoundObject* thunk(RE::TESBoundObject* a_this)
+		{
+			//I believe this is the hook, but the parameters might not be right.
+			auto* magic_item = static_cast<RE::MagicItem*>(a_this);
+
+			if (!magic_item)
+				goto end;
+
+			//logger::debug("As bound {:X}, as magic {:X}", (uintptr_t)a_this, (uintptr_t)magic_item);
+
+			magic_item->pad74 = 0;
+			magic_item->pad84 = 0;
+
+			end:
+			return func(a_this);
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+
+	//Override call. There are few and far between calls in here, so I think I'll likely just want to remake this.
+	struct GetActorValueForCostHook
+	{
+		//
+		//Note, hook is actually for SetBaseActorValue
+
+		static void Patch()
+		{
+			auto hook_addr = REL::RelocationID(33817, 34609).address();//SE: 0x556780, AE: 0x5792A0, VR: ???
+			auto return_addr = hook_addr + 0x5;
+			//*
+			struct Code : Xbyak::CodeGenerator
+			{
+				Code(uintptr_t ret_addr)
+				{
+					//uintptr_t arg_0 = qword ptr 08h
+					mov(ptr[rsp + 0x08], rbx);
+
+					mov(rax, ret_addr);
+					jmp(rax);
+				}
+			} static code{ return_addr };
+
+			auto& trampoline = SKSE::GetTrampoline();
+
+			auto placed_call = IsCallOrJump(hook_addr) > 0;
+
+			auto place_query = trampoline.write_branch<5>(hook_addr, (uintptr_t)thunk);
+
+			if (!placed_call)
+				func = (uintptr_t)code.getCode();
+			else
+				func = place_query;
+
+
+			logger::info("GetActorValueForCostHook complete...");
+			//*/
+		}
+
+		static RE::ActorValue thunk(RE::MagicItem* a_this, int32_t right_hand)
+		{
+			//GetCostCannotCastReason 140556810. Determines if it's being out of magicka
+
+			auto result = func(a_this, right_hand);
+			
+			if (!a_this)
+				return result;
+
+
+			uint32_t value = right_hand ? a_this->pad74 : a_this->pad84;
+
+			uint32_t pad1 = a_this->pad74;
+			uint32_t pad2 = a_this->pad84;
+
+			result = !value ? result : static_cast<RE::ActorValue>(value);
+
+			logger::debug("TEST PAD OF {} {} and {}, result {}", a_this->formID, pad1, pad2, (int)result);
+
+			return result;
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+
+
 	//Deprecated
 	template <class... PatchTypes> requires(sizeof...( PatchTypes) >  0)
 	struct ReadFromFileStreamHook
@@ -738,14 +842,7 @@ namespace AVG
 
 			using FormClass = FormType<I>;
 			
-			REL::Relocation<uintptr_t> FormType__TESForm_VTable;
-			
-			if constexpr (std::is_same_v<FormClass, RE::BGSStoryManagerNodeBase>){
-				FormType__TESForm_VTable = REL::Relocation<uintptr_t>{ RE::VTABLE_BGSStoryManagerNodeBase[0] };
-			}
-			else {
-				FormType__TESForm_VTable = REL::Relocation<uintptr_t>{ FormClass::VTABLE[0] };
-			}
+			REL::Relocation<uintptr_t> FormType__TESForm_VTable = REL::Relocation<uintptr_t>{ FormClass::VTABLE[0] };
 
 			//func[I] = FormType__TESForm_VTable.write_vfunc(0x06, thunk<I>);
 			std::get<I>(func) = FormType__TESForm_VTable.write_vfunc(0x06, thunk<FormClass, I>);
@@ -791,7 +888,7 @@ namespace AVG
 					return result;
 				}
 
-				FormExtraValueHandler::ProcessForm(a_this, a2);
+				FormExtraValueHandler::AddUnrepresentedForm(a_this);
 
 				return result;
 			}
@@ -801,6 +898,81 @@ namespace AVG
 		//If I can, find some way to simpli
 		static inline std::tuple<REL::Relocation<decltype(thunk<PatchTypes, 0>)>...> func;
 	};
+
+	template <class... PatchTypes> requires(sizeof...(PatchTypes) > 0)
+	struct InitializeAfterAllFormsReadHook
+	{
+		using Args = std::tuple<PatchTypes...>;
+
+		static constexpr size_t PatchSize = sizeof...(PatchTypes);
+
+		template<size_t I>
+		using FormType = std::tuple_element<I, Args>::type;
+
+
+		template <size_t I>
+		static void NthPatch()
+		{
+
+			using FormClass = FormType<I>;
+
+			REL::Relocation<uintptr_t> FormType__TESForm_VTable = REL::Relocation<uintptr_t>{ FormClass::VTABLE[0] };
+
+			//func[I] = FormType__TESForm_VTable.write_vfunc(0x06, thunk<I>);
+			std::get<I>(func) = FormType__TESForm_VTable.write_vfunc(0x13, thunk<FormClass, I>);
+
+			logger::info("Created Nth patch for {} at {}", typeid(FormClass).name(), I);
+
+			if constexpr (I > 0)
+				NthPatch<I - 1>();
+		}
+
+
+		//I hate this method of putting stuff on the main thread like this
+		static void Patch()
+		{
+			//What I can do is, this thing makes an array of relocations with me making a parameter pack of types, then once this parameter
+			// back of types is established I can basically just do Type::VTABLE[0]..., then iterate through all of them. Actually, no reason
+			// I can do that like that here right?
+			//I'm still gonna hold off because pulling out the old compile time looper would be a pain.
+
+			NthPatch<PatchSize - 1>();
+
+			//REL::Relocation<uintptr_t> EffectSetting__TESForm_VTable{ RE::VTABLE_EffectSetting[0] };
+
+			//func = EffectSetting__TESForm_VTable.write_vfunc(0x06, thunk);
+		}
+
+
+		template<class ClassType, size_t I>
+		static bool thunk(void* a1)
+		{
+			using FormClass = FormType<I>;
+
+			if constexpr (std::is_same_v<FormClass, void>)
+				return false;
+			else
+			{
+				FormClass* a_this = reinterpret_cast<FormClass*>(a1);
+
+				auto result = std::get<I>(func)(a_this);
+
+
+				if (!result) {
+					return result;
+				}
+
+				FormExtraValueHandler::AddUnrepresentedForm(a_this);
+
+				return result;
+			}
+
+		}
+
+		//If I can, find some way to simpli
+		static inline std::tuple<REL::Relocation<decltype(thunk<PatchTypes, 0>)>...> func;
+	};
+
 
 	//Deprecated
 	//template <class... PatchType>
@@ -1013,7 +1185,7 @@ namespace AVG
 #ifdef _DEBUG
 			constexpr size_t reserve = 256;
 #else
-			constexpr size_t reserve = 70;
+			constexpr size_t reserve = 70;//98 again.
 #endif
 
 			//Simple safe measure, I don't need the space atm though.
@@ -1050,8 +1222,18 @@ namespace AVG
 			GetBaseActorValueHook::Patch();
 			GetActorValueModifierHook::Patch();
 			GetActorValueIDFromNameHook::Patch();
+			
+			//MagicItemCtorHook::Patch();
+			//GetActorValueForCostHook::Patch();
+			
+			
+			
+			ReadFromFileStreamHook<RE::TESIdleForm, RE::BGSCameraPath, RE::TESTopicInfo>::Patch();
+			//This should have less repetition and no need for a set
+			// didn't work.
+			//InitializeAfterAllFormsReadHook<RE::TESIdleForm, RE::BGSCameraPath, RE::TESTopicInfo>::Patch();
+			
 			//These are no longer included.
-			//ReadFromFileStreamHook<FILE_STREAM_TYPES>::Patch();
 			//EffectSetting_InitializeAfterAllFormsReadHook::Patch();
 
 			

@@ -579,10 +579,18 @@ namespace Arthmetic
 #define do_return(mc_action) { mc_action; return; } true
 #define do_return_X(mc_action, mc_what) { mc_action; return mc_what; } true
 
+//What this should do is skip the true false, then when it wants to break it will do it by jumping back to __break;
+
 #define cycle_switch(mc_flag) \
+	if (false){\
+		break_##mc_flag:\
+		true;\
+	}\
+	else\
 	for (decltype(mc_flag) __flag = (decltype(mc_flag))0x1; \
-	__flag < sizeof(decltype(mc_flag)) * 8; __flag = __flag = __flag << 1) \
+	__flag < sizeof(decltype(mc_flag)) * 8; __flag = __flag << 1) \
 	switch (__flag & mc_flag)
+//I'd like a second version that as a staring point, that way if I used a version that's a mix of these, I have the choice to bail.
 
 	namespace
 	{

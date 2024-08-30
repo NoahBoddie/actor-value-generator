@@ -4,6 +4,29 @@
 static_assert(false, "Macro 'ARITHMETIC_API_SOURCE' isn't defined.");
 #endif
 
+template <class T>
+struct ABIContainer
+{
+	T* _data = nullptr;
+	std::uint64_t _size{};
+		
+
+	T& operator[] (std::uint64_t index) const
+	{
+		assert(index < _size);
+
+		return _data[index];
+	}
+
+	uint64_t size() const
+	{
+		return _size;
+	}
+	ABIContainer() = default;
+	ABIContainer(T* d, uint64_t s) : _data{ d }, _size{ s } {}
+	ABIContainer(std::vector<T>& v) : _data{ v.data() }, _size{ v.size() } {}
+};
+
 
 namespace Arthmetic
 {
@@ -22,7 +45,7 @@ namespace Arthmetic
 #endif
 
 
-	using ArgumentList = std::vector<SWITCH_ARG*>;
+	using ArgumentList = ABIContainer<SWITCH_ARG*>;
 
 
 #ifdef ARTH_OBJECT_TYPE
@@ -51,7 +74,7 @@ namespace Arthmetic
 namespace ArithmeticAPI
 {
 
-	using NativeFormula = float(*)(Arthmetic::Target, const Arthmetic::ArgumentList&);
+	using NativeFormula = float(*)(Arthmetic::Target, const Arthmetic::ArgumentList);
 
 
 
@@ -79,7 +102,7 @@ namespace ArithmeticAPI
 		/// Gets the current version of the interface.
 		/// </summary>
 		/// <returns></returns>
-		virtual Version GetVersion() = 0;
+		[[nodiscard]] virtual Version GetVersion() = 0;
 
 
 		/// <summary>
@@ -87,7 +110,7 @@ namespace ArithmeticAPI
 		/// </summary>
 		/// <param name="arg"></param>
 		/// <returns></returns>
-		virtual Arthmetic::Target ArgAsObject(SWITCH_ARG* arg) = 0;
+		[[nodiscard]] virtual Arthmetic::Target ArgAsObject(SWITCH_ARG* arg) = 0;
 
 
 		/// <summary>
@@ -95,7 +118,7 @@ namespace ArithmeticAPI
 		/// </summary>
 		/// <param name="arg"></param>
 		/// <returns></returns>
-		virtual float ArgAsNumber(SWITCH_ARG* arg) = 0;
+		[[nodiscard]] virtual float ArgAsNumber(SWITCH_ARG* arg) = 0;
 
 
 		/// <summary>
@@ -103,7 +126,7 @@ namespace ArithmeticAPI
 		/// </summary>
 		/// <param name="arg"></param>
 		/// <returns></returns>
-		virtual const char* ArgAsString(SWITCH_ARG* arg) = 0;
+		[[nodiscard]] virtual const char* ArgAsString(SWITCH_ARG* arg) = 0;
 
 		/// <summary>
 		/// When a routine is flagged native this will be used to link a C++ function with it. Safe to call after PostPostLoad.
@@ -111,7 +134,7 @@ namespace ArithmeticAPI
 		/// <param name="routine_name">is the name of the routine you'd like this to define.</param>
 		/// <param name="function">is the function you'd like the routine to call when executed.</param>
 		/// <param name="constaints">are expected parameter constraints. Currently unimplemented, set to zero.</param>
-		virtual void LinkNativeFunction(std::string routine_name, NativeFormula function, Arthmetic::ParamConstraints constaints = 0) = 0;
+		[[nodiscard]] virtual void LinkNativeFunction(std::string_view routine_name, NativeFormula function, Arthmetic::ParamConstraints constaints = 0) = 0;
 	};
 
 	using CurrentInterface = InterfaceVersion1;

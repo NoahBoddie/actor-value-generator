@@ -8,11 +8,247 @@
 //free_rul::serializing
 #include "RoguesGallery/TemporaryFlag.h"
 
+#include "Arthmetic/ArthmeticUtility.h"
 
+
+namespace AVG
+{
+	class ExtraValueData;
+}
 
 
 namespace RGL
 {
+	//TestZone, move me some place.
+
+	constexpr string_hash serial_hash_integer(uint32_t i) noexcept
+	{
+
+		uint8_t lsb = i & 0xFF;
+
+		i &= ~lsb;
+
+		i |= (lsb & 0x0F) << 8;
+		i |= (lsb & 0xF0) << 16;
+
+		return i;
+	}
+
+	template<bool Insensitive = false>
+	constexpr string_hash serial_hash(const std::string_view view) noexcept
+	{
+		string_hash raw_hash = Arthmetic::hash<Insensitive>(view.data(), view.size());
+
+		return serial_hash_integer(raw_hash);
+	}
+
+
+
+	struct TypeHash
+	{
+		constexpr TypeHash() = default;
+
+		constexpr TypeHash(const uint32_t arg) : code(serial_hash_integer(arg)) {}//arg == 0 ? 0xFFFFFFFF : serial_hash_integer(arg)) {}
+		constexpr TypeHash(const char* arg) : code(serial_hash(arg)) {}//!arg || *arg == '\0' ? 0xFFFFFFFF : serial_hash(arg)) {}
+		constexpr TypeHash(const std::string_view& arg) : code(serial_hash(arg)) {}//arg == "" ? 0xFFFFFFFF : serial_hash(arg)) {}
+
+
+
+		constexpr static TypeHash RawHash(uint32_t arg)
+		{
+			TypeHash _hash{};
+
+			_hash.code = arg;
+
+			return _hash;
+		}
+
+		constexpr static TypeHash RawHash(std::string_view arg)
+		{
+			TypeHash _hash{};
+
+			_hash.code = Arthmetic::hash(arg);
+
+			return _hash;
+		}
+
+		constexpr static TypeHash Create(const char* arg)
+		{
+			TypeHash _hash{};
+
+
+			_hash.code = serial_hash(arg);
+
+			return _hash;
+		}
+
+		constexpr static TypeHash Create(uint32_t arg)
+		{
+			TypeHash _hash{};
+
+			_hash.code = serial_hash_integer(arg);
+
+			return _hash;
+		}
+
+
+		constexpr static TypeHash Create(std::string_view arg)
+		{
+			TypeHash _hash{};
+
+			_hash.code = serial_hash(arg);
+
+			return _hash;
+		}
+
+		uint32_t code{};
+
+
+		operator uint32_t() const noexcept{ return code; }
+
+		constexpr bool operator==(TypeHash& a_rhs) noexcept { return code == a_rhs.code; }
+
+		constexpr bool operator!=(TypeHash& a_rhs) noexcept { return code != a_rhs.code; }
+	};
+
+
+	template <typename T> constexpr std::string_view type_name();
+
+	template <>
+	constexpr std::string_view type_name<void>()
+	{
+		return "void";
+	}
+
+	namespace detail {
+
+		using type_name_prober = void;
+
+		template <typename T>
+		constexpr std::string_view wrapped_type_name()
+		{
+#ifdef __clang__
+			return __PRETTY_FUNCTION__;
+#elif defined(__GNUC__)
+			return __PRETTY_FUNCTION__;
+#elif defined(_MSC_VER)
+			return __FUNCSIG__;
+#else
+			#error "Unsupported compiler"
+#endif
+		}
+
+		constexpr std::size_t wrapped_type_name_prefix_length() {
+			return wrapped_type_name<type_name_prober>().find(type_name<type_name_prober>());
+		}
+
+		constexpr std::size_t wrapped_type_name_suffix_length() {
+			return wrapped_type_name<type_name_prober>().length()
+				- wrapped_type_name_prefix_length()
+				- type_name<type_name_prober>().length();
+		}
+
+	} // namespace detail
+
+	template <typename T>
+	constexpr std::string_view type_name() {
+		constexpr auto wrapped_name = detail::wrapped_type_name<T>();
+		constexpr auto prefix_length = detail::wrapped_type_name_prefix_length();
+		constexpr auto suffix_length = detail::wrapped_type_name_suffix_length();
+		constexpr auto type_name_length = wrapped_name.length() - prefix_length - suffix_length;
+		return wrapped_name.substr(prefix_length, type_name_length);
+	}
+
+	template<typename T>
+	struct TypeName {
+	
+		constexpr static std::string_view fullname_intern() {
+#if defined(__clang__) || defined(__GNUC__)
+			return __PRETTY_FUNCTION__;
+#elif defined(_MSC_VER)
+			return __FUNCSIG__;
+#else
+#error "Unsupported compiler"
+#endif
+		}
+		constexpr static std::string_view name() {
+			//Future needs for get name would be removed specialization if I can work that in.
+			return type_name<T>();
+
+			size_t prefix_len = TypeName<void>::fullname_intern().find("void");
+			size_t multiple = TypeName<void>::fullname_intern().size() - TypeName<int>::fullname_intern().size();
+			size_t dummy_len = TypeName<void>::fullname_intern().size() - 4 * multiple;
+			size_t target_len = (fullname_intern().size() - dummy_len) / multiple;
+			std::string_view rv = fullname_intern().substr(prefix_len, target_len);
+			if (rv.rfind(' ') == rv.npos)
+				return rv;
+			return rv.substr(rv.rfind(' ') + 1);
+		}
+
+	public:
+		constexpr static std::string_view value = name();
+	};
+
+	struct DefaultSerialize;
+	
+	template <class A, class B>
+	struct SerialVector;
+
+	constexpr std::string_view testNAME = TypeName<std::vector<char>>::value;
+
+	//static_assert(testNAME == "std::vector<char, std::allocator<char>>");
+	
+	struct TestStructForCereal
+	{
+		constexpr virtual TypeHash GetTypeHash()
+		{
+			//Returning a string will hash the string for a serialization hash,
+			// returning a number will hash the number to be viable for use
+			return "Test";
+		}
+	};
+
+
+	template<class Type>requires(&Type::GetTypeHash != nullptr)
+		constexpr TypeHash GetHashFromType(Type& target)
+	{
+		if constexpr (std::derived_from<Type, ISerializer>) {
+			return target.GetTypeHash();
+		}
+		else {
+			return Type::GetTypeHash();
+		}
+	}
+
+	template<class Type>
+	constexpr TypeHash GetHashFromType(Type& target)
+	{
+		return TypeName<std::remove_const_t<Type>>::value;
+	}
+
+	template<class T>
+	bool operator==(T& a_this, TypeHash& a_rhs)
+	{
+		TypeHash type_hash = GetHashFromType(a_this);
+		return type_hash.code == a_rhs.code;
+	}
+
+
+	template<class T>
+	inline bool operator!=(T& a_this, TypeHash& a_rhs)
+	{
+		return (a_this == a_rhs) == false;
+	}
+	//This isn't really even going to be used, the check type hash is basically just the operator.
+	template <class T>
+	bool CheckTypeHash(T& target, TypeHash type_hash)
+	{
+		return target == type_hash;
+	}
+///End of test field
+
+
+
 
 	enum class SerializingState
 	{
@@ -107,9 +343,11 @@ namespace RGL
 		// serialized/deserialized.
 		//The second type is used to denote that the data seen has been dumped and thrown out.
 
-		static constexpr inline uint32_t BufferHeader = 'HEAD';
-		static constexpr inline uint32_t DataDumped = 'DUMP';
-
+		//static constexpr inline uint32_t BufferHeader = 'HEAD';
+		//static constexpr inline uint32_t DataDumped = 'DUMP';
+		static constexpr inline TypeHash BufferHeader = TypeHash::RawHash('HEAD');
+		static constexpr inline TypeHash DataDumped = TypeHash::RawHash('DUMP');
+		static constexpr inline TypeHash acceptAll = TypeHash::RawHash(0xFFFFFFFF);
 	};
 
 	//This function requires definition elsewhere basically.
@@ -163,7 +401,8 @@ namespace RGL
 
 		struct CurrentProcessData
 		{
-			std::uint32_t type = 0;//This is represented by a string hash
+			//std::uint32_t type = 0;//This is represented by a string hash
+			TypeHash type = TypeHash();//This is represented by a string hash
 			std::uint32_t version = 0;//I think I was gonna use version for something else, if not change to be the new version object later.
 			std::uint32_t length = 0;//This is the data length, but not explicitly the classes size.
 
@@ -184,7 +423,7 @@ namespace RGL
 			{
 				
 
-				type = t;
+				type = TypeHash::RawHash(t);
 				length = l;
 				version = v;//For now.
 				auto split = split_v_process(v);
@@ -596,8 +835,8 @@ namespace RGL
 		{
 
 			constexpr uint32_t acceptAll = 0xFFFFFFFF;
-			uint32_t type_code = acceptAll;
-
+			TypeHash type_code = GetHashFromType(target);;
+			//type_code = SerializingID::acceptAll;
 
 			//static_assert(is_specialization<target, std::unique_ptr>::value, "ERROR, unique_ptr found");
 			//I would like to rely on these in order to handle most of the serializing. But for not, don't rock the boat.
@@ -667,6 +906,11 @@ namespace RGL
 
 			bool return_value = true;
 
+
+			//I think type code checking can actually go some where around here.
+
+
+
 			//I would like to fix this bit
 			if constexpr (std::derived_from<Type, ISerializer> == true)
 			{
@@ -684,14 +928,16 @@ namespace RGL
 					}
 					else if (IsDeserializing() == true) {//But if it's deserializing I want to make sure the types match.
 						//Clean this up.
-						if (type_code != _processData.type && _processData.type != acceptAll) {
-							logger::info("ERROR: process typecode {:b} does not equal current depth {:b}.", _processData.type, type_code);
+						//if (type_code != _processData.type && _processData.type != acceptAll) {
+						//I REALLY would like the regular operator to fucking work please.
+						if (!CheckTypeHash(target, _processData.type) && _processData.type.code != SerializingID::acceptAll.code) {
+							logger::error("Process typecode {:X} does not equal current type code {:X} for {}.", _processData.type, type_code, TypeName<Type>::value);
 							DumpDepth(original_depth);
 							return false;
 						}
 						else if (_processData.serialDepth != original_depth)
 						{
-							logger::info("ERROR: process depth {} does not equal current depth {}.", _processData.serialDepth, original_depth);
+							logger::error("ERROR: process depth {} does not equal current depth {}.", _processData.serialDepth, original_depth);
 							DumpDepth(original_depth);
 							return false;
 						}
@@ -700,7 +946,7 @@ namespace RGL
 						//If the next thing does something, it will undo this flag//This didn't work, it did not work.
 						SetCurrentRecordReadiness(false);
 					}
-					logger::info("<!> Open encounter {}", _processData.GetID());
+					logger::debug("<!> Open encounter {}", _processData.GetID());
 
 				}
 
@@ -790,6 +1036,13 @@ namespace RGL
 					else if (!original_lock && _processData.serialDepth != original_depth)
 					{
 						logger::info("ERROR: process depth {} does not equal current depth {}.", _processData.serialDepth, original_depth);
+						DumpDepth(_depth);
+						_serializableLock = original_lock;
+						return false;
+					}
+					//NEW!
+					else if (!CheckTypeHash(target, _processData.type) && _processData.type.code != SerializingID::acceptAll.code) {
+						logger::error("Process typecode {:X} does not equal current type code {:X} for {}.", _processData.type, type_code, TypeName<Type>::value);
 						DumpDepth(_depth);
 						_serializableLock = original_lock;
 						return false;
@@ -996,6 +1249,15 @@ namespace RGL
 		template <class PointerType>requires(pointer_type<PointerType>)//requires(std::is_pointer_v<PointerType>)//
 		bool Serialize(PointerType& target, std::uint32_t intro_version = 0, std::uint32_t incompatible_version = 0, SerializingFlag flags = SerializingFlag::None)
 		{
+			///Ramble Block
+			//An interesting functionality for this could be that if there's a flag available for it, one can just have
+			// this create it if the serialization is successful.
+
+			//The main issue is thus, if something is a pointer, I'll need something to use so I can call serialize on it, open up
+			// the record to begin dumping information. Largely, this goes into the other one, but it's basically to say that the above
+			// needs a "heading" version of serialize, that both the above and this one will use, but something that allows me to use
+			// one but not the other.
+			///Ramble over~
 
 			//I think this is currently unused.
 			using ElementType = std::pointer_traits<PointerType>::element_type;//std::remove_pointer_t<PointerType>;//
@@ -1129,6 +1391,8 @@ namespace RGL
 		//	this(target, buffer, success);
 		//}
 	};
+
+
 
 }
 
