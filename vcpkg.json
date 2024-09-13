@@ -30,7 +30,10 @@
             "xbyak",
             "tomlplusplus",
             "boost-algorithm",
-            "boost-regex"
+            "boost-regex",
+            "magic-enum",
+            "boost-regex",
+            "simpleini"
           ]
         },
         "tests": {

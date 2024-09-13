@@ -5,8 +5,8 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ## Define project
 ########################################################################################################################
 project(
-        ActorValueExtension
-        VERSION 1.9.5.6
+        ActorValueGenerator
+        VERSION 2.0.0.0
         DESCRIPTION "An SKSE modding tool that enables users to make new actor values as well as extending their existing functionally."
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
@@ -31,52 +31,11 @@ configure_file(
 )
 
 set(headers
-#I would really like to make this as a sort of dependency instead. But for now.
-        include/Arthmetic.h
-        include/Serialization.h
-        include/RoguesGallery.h
-
-        include/API_Arithmetic.h
+        #I would really like to make this as a sort of dependency instead. But for now.
         include/API_ActorValueGenerator.h
 )
 
 set(sources
-        src/Arthmetic/Constructor.h
-        src/Arthmetic/ArthmeticObject.h
-        src/Arthmetic/IDelegate.h
-        src/Arthmetic/DelegateType.h
-        src/Arthmetic/IRoutine.h
-        src/Arthmetic/Coroutine.h
-        src/Arthmetic/Subroutine.h
-        src/Arthmetic/DelegateArgument.h
-        src/Arthmetic/DelegateArgument.h
-        #src/Arthmetic/DualOperator.h
-        #src/Arthmetic/OpenOperator.h
-        #src/Arthmetic/FunctionDelegate.h
-        src/Arthmetic/IReadyArthmetic.h
-        src/Arthmetic/IOperator.h
-        src/Arthmetic/OperatorType.h
-        src/Arthmetic/ArgumentType.h
-        src/Arthmetic/RoutineArgument.h
-        src/Arthmetic/RoutineDelegate.h
-        src/Arthmetic/RoutineItem.h
-        src/Arthmetic/RoutineItemType.h
-        src/Arthmetic/TargetType.h
-        src/Arthmetic/Record.h
-        src/Arthmetic/IDirective.h
-        src/Arthmetic/IFormula.h
-        src/Arthmetic/FunctionInterface.h
-        src/Arthmetic/FormulaDelegate.h
-        src/Arthmetic/ParameterSetting.h
-
-        src/Arthmetic/ArthmeticConstructor.h
-        src/Arthmetic/ArthmeticParser.h
-        src/Arthmetic/ArthmeticUtility.h
-        src/Arthmetic/RoutineItem.cpp
-        src/Arthmetic/IReadyArthmetic.cpp
-        src/Arthmetic/DelegateArgument.cpp
-
-
         src/Serialization/ISerializer.h
         src/Serialization/SerialArgument.h
         src/Serialization/SerialComponent.h
@@ -90,9 +49,6 @@ set(sources
         src/Serialization/SerializingWrapper.h
 
       
-        src/RoguesGallery/Utility.h
-        src/RoguesGallery/TemporaryFlag.h
-
 
         src/Types.h
         src/ExtraValue.h
@@ -110,7 +66,6 @@ set(sources
         src/Utility.h
         src/ValueAliasHandler.h
 
-        src/API_Arithmetic.cpp
         src/API_ActorValueGenerator.cpp
 
         ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
@@ -136,6 +91,20 @@ message("\tTests: ${BUILD_TESTS}")
 ## Configure target DLL
 ########################################################################################################################
 find_package(CommonLibSSE CONFIG REQUIRED)
+
+
+#THis attempt has not worked.
+#add_subdirectory("C:/Users/Noah/Desktop/Modding/[Lab]/{Lab Tools}/lexicon-skse" LexiconSKSE)
+#add_dependencies(LexiconSKSE LexiconSKSE::LexiconSKSE)
+
+#message(${PROJECT_NAME})
+
+#target_link_libraries(
+#	${PROJECT_NAME}
+#	PRIVATE
+#        LexiconSKSE::LexiconSKSE
+#)
+
 
 
 add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${headers} ${sources})
