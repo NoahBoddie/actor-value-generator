@@ -109,12 +109,13 @@
 
 #include <BGSEntryPointFunctionDataTwoValue.h>
 
-//This is to be used in this things own project
-#define ARITHMETIC_SOURCE 1
-#define AVG_SOURCE 1
 
 
-namespace logger = SKSE::log;
+#include "Lexicon.h"
+
+#include "GameObjectStuff.h"
+
+//namespace logger = SKSE::log;
 
 
 
@@ -127,23 +128,20 @@ namespace logger = SKSE::log;
 
 #include "API_ActorValueGenerator.h"
 
-#include <Arthmetic.h>
-
 
 #include <toml++/toml.h>
 
 #include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
 
-#include <Serialization.h>//This is required to go later, fix that please.
-
 #include "Plugin.h"
+
 
 
 namespace AVG
 {
-    using namespace RGL;
-    using namespace Arthmetic;
+    using namespace RGL_NAMESPACE;
+    using namespace RGL_INCLUDE_NAMESPACE;
 }
 
 // Compatible declarations with other sample projects.
@@ -152,11 +150,21 @@ namespace AVG
 using namespace std::literals;
 using namespace REL::literals;
 
+
+
+namespace logger
+{
+    using namespace SKSE::log;
+}
+
 namespace util {
     using SKSE::stl::report_and_fail;
 }
 
+
+
 #define RELOCATION_OFFSET(SE, AE, ...) REL::VariantOffset(SE, AE, SE).offset()
 
-#undef ARTH_TARGET_TYPE
-#undef ARTH_OBJECT_TYPE
+//Move these eventually pls.
+inline LEX::IScript* commons = nullptr;
+inline LEX::IScript* legacy = nullptr;

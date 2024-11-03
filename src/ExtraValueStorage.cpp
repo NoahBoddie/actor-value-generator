@@ -8,6 +8,8 @@ namespace AVG
 		if (!actor)
 			return;
 
+		logger::info("Project {}", LEX::Formula<float>::Run("GetPlayer().ProjectTest()", commons));
+
 		//if deserializing, we won't really do anything, just create it.
 
 		auto size = ExtraValueInfo::GetCount(ExtraValueType::Adaptive);

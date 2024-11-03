@@ -3,7 +3,7 @@
 #include "Types.h"
 #include "Utility.h"
 #include "Serialization/SerializableList.h"
-
+#include "Serialization/SerializationTypePlayground.h"
 namespace AVG
 {
 
@@ -14,7 +14,6 @@ namespace AVG
 
 
 	
-
 	
 
 
@@ -146,6 +145,10 @@ namespace AVG
         //float levelUpAt;
 	};
 
+	using ValueFormula = LEX::Formula<float(RE::Actor::*)()>;
+	using SetFormula = LEX::Formula<void(RE::Actor::*)(RE::Actor*, float, float)>;
+
+
 	//This is functionally default data. Update data isn't something I'll want to implement for a while, and since this doesn't serialize I'm comfortable
 	// doing it later.
     struct DefaultData
@@ -161,7 +164,7 @@ namespace AVG
 
 		//rate is required.
 		//If value to update is zero, no timed update data will be used, and instead it will only update upon load.
-		IReadyArthmetic* defaultFunction = nullptr; 
+		ValueFormula defaultFunction;
         
     };
 
@@ -183,8 +186,8 @@ namespace AVG
 		float tmp_recRate{};
 		
 		//While delay is not required, the rate is similarly required.
-		IReadyArthmetic* recoveryDelay = nullptr;  //Null will mean there is no delay, if recovery exists.
-		IReadyArthmetic* recoveryRate = nullptr;  //Null here means no recovery.
+		ValueFormula recoveryDelay;  //Null will mean there is no delay, if recovery exists.
+		ValueFormula recoveryRate;  //Null here means no recovery.
     
 		Flags flags = None;
 
@@ -231,6 +234,7 @@ namespace AVG
 	enum class InfoFlags
 	{
 		None = 0,
+		//Delete this.
 		DerivedAffected = 1 << 0,	//Do plugins derived inherit the av aliases of this EVI?
 		Negative = 0b010,
 		Positive = 0b100,
@@ -258,11 +262,13 @@ namespace AVG
 		}
 	};
 
-	
 
 
     class ExtraValueInfo// : public SerializationHandler//Not actually a serialization handler, the wrapper handles that (for now?)
     {
+	protected:
+		ExtraValueInfo() = default;
+
 	public:
 		struct SerializeEntry
 		{
@@ -279,7 +285,7 @@ namespace AVG
 					if (!entry || entry->IsFunctional() == true)
 						name = std::string{ invalid };
 					else
-						name = entry->GetName();
+						name = std::string{ entry->GetName() };
 				}
 
 
@@ -313,6 +319,9 @@ namespace AVG
 			Functional,
 			Total
 		};
+
+
+		static void Create(std::string_view name, ExtraValueType type, const FileNode& node);
 
 		static constexpr DataID FunctionalID = 0xFFFFFFFF;
 
@@ -598,10 +607,12 @@ namespace AVG
 		ValueID				GetValueID() { return int(RE::ActorValue::kTotal) + 1 + GetBeginIndex(GetType()) + _valueIDOffset; }
 		ValueID				GetOffset() { return _valueIDOffset; }
 		//I'd really like to convert these to clean old string_views that share
-		std::string			GetName() { return valueName; }
+		std::string_view	GetName() { return valueName; }
 		const char*			GetCName() { return valueName.c_str(); }
 		RE::BSFixedString	GetFixedName() { return RE::BSFixedString(valueName.c_str()); }
 		RE::ActorValue		GetValueIDAsAV() { return static_cast<RE::ActorValue>(GetValueID()); }
+
+		virtual void LoadFromFile(const FileNode& node) = 0;
 
 		virtual bool AllowsSetting() { return false; }
 
@@ -748,13 +759,6 @@ namespace AVG
 		bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, RE::ACTOR_VALUE_MODIFIER modifier, float value) { return false; }
         
         
-        ExtraValueInfo(std::string& name)
-        {
-            //I would like this to have the job if appointing this to a list. It also copies the string given.
-			//For now, I think I'd like to make it a string, just for ease of use.
-			valueName = name;
-			//PushInfo();
-        }
     };
 
 	using ExtraValueType = ExtraValueInfo::ExtraValueType;
@@ -783,7 +787,7 @@ namespace AVG
 		DefaultData* GetDefaultData() override { return _default; }
 		RecoveryData* GetRecoveryData() override { return _recovery; }
 
-		float GetExtraValueDefault(RE::Actor* target) override { auto def = GetDefaultData(); return !def ? 0 : def->defaultFunction->RunImpl(target); }
+		float GetExtraValueDefault(RE::Actor* target) override { auto def = GetDefaultData(); return !def ? 0 : def->defaultFunction(target); }
 
 		SkillData* MakeSkillData() override
 		{
@@ -820,7 +824,7 @@ namespace AVG
             //The function attempts to update
         }
 
-        AdaptiveValueInfo(std::string& name) : ExtraValueInfo{ name }
+        void AdaptiveValueInfo_(std::string& name)// : ExtraValueInfo{ name }
 		{
 			//I would like this to have the job if appointing this to a list. It also copies the string given.
             AddExtraValueInfo(this, ExtraValueType::Adaptive);
@@ -828,15 +832,15 @@ namespace AVG
 		}
 		
 		//Note, this is a temp solution.
-        AdaptiveValueInfo(std::string& name, std::string& delay, std::string& rate) : ExtraValueInfo{ name }
+        void AdaptiveValueInfo_(std::string& name, std::string& delay, std::string& rate)// : ExtraValueInfo{ name }
 		{
 			//I would like this to have the job if appointing this to a list. It also copies the string given.
 
 			_recovery = new RecoveryData();
 			//_recovery->tmp_recDelay = delay;
 			//_recovery->tmp_recRate = rate;
-			_recovery->recoveryDelay = CreateSubroutine(delay);
-			_recovery->recoveryRate = CreateSubroutine(rate);
+			_recovery->recoveryDelay = ValueFormula::Create(delay);//, "ActorValueGenerator::Commons");
+			_recovery->recoveryRate = ValueFormula::Create(delay);
 
 			//This should be done EXTERNALLY, that way it's easier to make exclusive.
 			AddExtraValueInfo(this, ExtraValueType::Adaptive);
@@ -844,6 +848,7 @@ namespace AVG
 			//logger::info("{}", _dataID);
 		}
 
+		void LoadFromFile(const FileNode& node) override;
 
     };
 
@@ -908,49 +913,6 @@ namespace AVG
 
 	}
 
-	//This shouldn't be here, this is fucking stupid.
-	//Also also, I may move these over to being functions, with the set array getting pointers to these instead, that way I can put lambdas or member funcs within.
-	inline std::map<std::string, ExportFunction> exportMap{};
-
-	struct ExportInfo
-	{
-		//std::string name{};//To remove the time sensitive schtick. Actually kinda annoying to implement right now. I'll change it later.
-
-		mutable ExportFunction function{ nullptr };
-
-		std::vector<std::string> context{};
-
-		void Check() const
-		{
-			if (!function) {
-				//auto result = exportMap.find(name);
-
-				//if (exportMap.end() != result)
-				//	function = result->second;
-			}
-		}
-
-		operator bool() const
-		{
-			//if (!function)
-			//	Check();
-
-			return function != nullptr;
-		}
-		
-		ExportInfo(ExportFunction func) : function{ func } {}
-		ExportInfo(ExportFunction func, std::vector<std::string>& str_list) : 
-			function{ func }, context{ str_list }
-		{
-			//std::copy_if(str_list.begin(), str_list.begin(),
-			//	std::back_inserter(context), [](std::string& str) { return str != ""; });
-			//logger::debug("size {} str {}", context.size(), str_list[0]);
-			
-			context.shrink_to_fit();
-		}
-	};
-
-	using ExportInfoArray = std::vector<ExportInfo>;
 
     class FunctionalValueInfo : public ExtraValueInfo
 	{
@@ -968,25 +930,12 @@ namespace AVG
 		ExtraValueInput _getFlags = ExtraValueInput::None;
 		ExtraValueInput _setFlags = ExtraValueInput::None;
 
-		ModifierArray<IReadyArthmetic*>	_get{};
-		ModifierArray<ExportInfoArray>	_set{};
+		ModifierArray<ValueFormula>	_get{};
+		ModifierArray<SetFormula>	_set{};
 
-		void HandleSetExport(ExportSetData& data)
-		{
-			for (size_t i = 0; i < _set[data.av_modifier].size(); i++) {
-				ExportInfo& info = _set[data.av_modifier][i];
-
-				if (info) {
-					std::vector<const char*> context(info.context.size());
-
-					std::transform(info.context.begin(), info.context.end(), context.begin(),
-						[](std::string& str) { return str.c_str(); });
-
-					data.export_context = context;
-					info.function(data);
-				}
-
-			}
+		void HandleSetExport(RE::ACTOR_VALUE_MODIFIER modifier, RE::Actor* target, RE::Actor* cause, float from, float to)
+		{//Rename this
+			_set[modifier](target, cause, from, to);
 		}
 
 
@@ -1014,16 +963,16 @@ namespace AVG
 			
 
 			float bas = _get[ActorValueModifier::kTotal] && !!(value_types & ExtraValueInput::Base) ? 
-				_get[ActorValueModifier::kTotal]->RunImpl(target) : 0;
+				_get[ActorValueModifier::kTotal](target) : 0;
 			
 			float prm = _get[ActorValueModifier::kPermanent] && !!(value_types & ExtraValueInput::Permanent) ?
-				_get[ActorValueModifier::kPermanent]->RunImpl(target) : 0;
+				_get[ActorValueModifier::kPermanent](target) : 0;
 
 			float tmp = _get[ActorValueModifier::kTemporary] && !!(value_types & ExtraValueInput::Temporary) ?
-				_get[ActorValueModifier::kTemporary]->RunImpl(target) : 0;
+				_get[ActorValueModifier::kTemporary](target) : 0;
 			
 			float dmg = _get[ActorValueModifier::kDamage] && !!(value_types & ExtraValueInput::Damage) ?
-				_get[ActorValueModifier::kDamage]->RunImpl(target) : 0;
+				_get[ActorValueModifier::kDamage](target) : 0;
 
 			dmg = fmin(dmg, 0);
 
@@ -1034,46 +983,26 @@ namespace AVG
 
 		bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
 		{
-			if (_set[modifier].size() == 0)
+			if (!_set[modifier])
 				return false;
 
-			ExportSetData data(target, GetValueIDAsAV(), GetCName(), modifier, value);
+			float from = GetExtraValue(target, ModifierToValueInput(modifier));
 
-			HandleSetExport(data);
+			_set[modifier](target, nullptr, from, value);
 
             return true;
         }
 
-		bool AddSetFunction(std::string function_name, ActorValueModifier mod, std::vector<std::string> context)
+		bool AddSetFunction(std::string func, ActorValueModifier mod, std::vector<std::string> context)
 		{
-			decltype(exportMap)::iterator result{};
-			ExportFunction func = nullptr;
+			
 
-			//For there to be a set there, there must be a coresponding get function
-			//Actually, rule removed.
-			//if (!(ModifierToValueInput(mod) & _getFlags))
-			//	return false;
 
-			//For there to be a set, there must be a get. Note that.
-			if (function_name == "")
+			_set[mod] = SetFormula::Create("cause", "from", "to", func);
+
+			if (!_set[mod])
 				return false;
 
-			result = exportMap.find(function_name);
-
-			//Couldn't find, say that plz.
-			if (exportMap.end() == result)
-				return false;
-
-
-			func = result->second;
-
-			if (!func)
-				return false;
-
-			ExportInfo exp_info = ExportInfo{ func, context };
-
-
-			_set[mod].push_back(exp_info);
 			_setFlags |= ModifierToValueInput(mod);
 
 			return true;
@@ -1081,21 +1010,15 @@ namespace AVG
 
 		virtual bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
 		{
-			if (_set[modifier].size() == 0) {
+
+			if (!_set[modifier])
 				return false;
-			}
 
-			//if (!_get[modifier]) {
-			//	return false;
-			//}
-			
-			float current = _get[modifier] ? _get[modifier]->RunImpl(target) : 0;
-			
-			ExportSetData data(target, aggressor, GetValueIDAsAV(), GetCName(), modifier, current + value, current);
+			float from = GetExtraValue(target, ModifierToValueInput(modifier));
 
-			HandleSetExport(data);
+			_set[modifier](target, aggressor, from, value);
 
-			return true;
+            return true;
 		}
 
 		void Included() override
@@ -1103,7 +1026,7 @@ namespace AVG
 			//logger::info("Functional value {} created. Get: {:04B}, Set: {:04B}", GetName(), (int)_getFlags, (int)_setFlags);
 		}
 
-		FunctionalValueInfo(std::string& name, ModifierArray<std::string> get_strings = {}, ModifierArray<std::string> set_strings = {}) : ExtraValueInfo{ name }
+		void FunctionalValueInfo_(std::string& name, ModifierArray<std::string> get_strings = {}, ModifierArray<std::string> set_strings = {})// : ExtraValueInfo{ name }
 		{
 			//I would like this to have the job if appointing this to a list. It also copies the string given.
 
@@ -1113,7 +1036,7 @@ namespace AVG
 			{
 				if (get_strings[mod] != "") {
 					logger::debug("making {}", get_strings[mod]);
-					_get[mod] = CreateSubroutine(get_strings[mod]);
+					_get[mod] = ValueFormula::Create(get_strings[mod]);
 					_getFlags |= ModifierToValueInput(mod);
 				}
 
@@ -1122,39 +1045,22 @@ namespace AVG
 			}
 
 			for (ActorValueModifier mod = ActorValueModifier::kPermanent; mod <= ActorValueModifier::kTotal; mod++)
-			{
-				break;
-
-				decltype(exportMap)::iterator result{};
-				ExportFunction func = nullptr;
-				
+			{				
 				//For there to be a set there, there must be a coresponding get function
-				if (!(ModifierToValueInput(mod) & _getFlags))
-					goto end;
+				if (!(ModifierToValueInput(mod) & _getFlags)) {
+					logger::info("corresponding get function must exist for set function.");
+					continue;
+				}
 
 				//For there to be a set, there must be a get. Note that.
 				if (set_strings[mod] == "")
-					goto end;
+					continue;
 
-				result = exportMap.find(set_strings[mod]);
+				_set[mod] = SetFormula::Create("cause", "from", "to", set_strings[mod]);
 
-				//Couldn't find, say that plz.
-				if (exportMap.end() == result)
-					goto end;
-
-
-				func = result->second;
-
-				if (!func)
-					goto end;
-
-				_set[mod].push_back(ExportInfo{ func });
 				_setFlags |= ModifierToValueInput(mod);
 			
-			end:
-
-				if (mod == ActorValueModifier::kTotal)
-					break;
+			
 			}
 
 
@@ -1165,11 +1071,11 @@ namespace AVG
 
 			//Should do nothing atm.
 		}
+
+		void LoadFromFile(const FileNode& node) override;
 	};
 
 	
-	static float temp_player_delay = 0;
-		
 
     //The Psuedo namespace is erased when the time has come.
 	namespace Psuedo

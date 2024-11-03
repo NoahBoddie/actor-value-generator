@@ -3,7 +3,7 @@
 #include "API_ActorValueGenerator.h"
 
 #include "ExtraValueInfo.h"
-#include "Arthmetic/ArthmeticUtility.h"
+
 
 namespace ActorValueGeneratorAPI
 {
@@ -16,9 +16,7 @@ namespace ActorValueGeneratorAPI
 
 		void RegisterExportFunction(std::string_view name, ExportFunction func) override
 		{
-			//For now I don't really care about making this check for null.
-			logger::info("export function {} registered.", name);
-			exportMap[std::string(name)] = func;
+			
 		}
 
 		void CheckActorValue(RE::ActorValue& av, const char* c_str) override

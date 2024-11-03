@@ -2,7 +2,6 @@
 
 namespace AVG
 {
-	using namespace Arthmetic;
 
 	using ActorProcessType = RE::PROCESS_TYPE;
 	
@@ -94,96 +93,5 @@ namespace AVG
 
 
 
-	inline ActorValueModifier& operator++(ActorValueModifier& type)
-	{
-		switch (type)
-		{
-		case ActorValueModifier::kPermanent:
-			type = ActorValueModifier::kTemporary;
-			break;
-
-		case ActorValueModifier::kTemporary:
-			type = ActorValueModifier::kDamage;
-			break;
-		case ActorValueModifier::kDamage:
-			type = ActorValueModifier::kTemporary;
-			break;
-
-		case ActorValueModifier::kTotal:
-			return type;
-		}
-
-		return type;
-	}
-
-	inline ActorValueModifier& operator--(ActorValueModifier& type)
-	{
-		switch (type)
-		{
-		case ActorValueModifier::kPermanent:
-			return type;
-
-		case ActorValueModifier::kTemporary:
-			type = ActorValueModifier::kPermanent;
-			break;
-		case ActorValueModifier::kDamage:
-			type = ActorValueModifier::kTemporary;
-			break;
-
-		case ActorValueModifier::kTotal:
-			type = ActorValueModifier::kDamage;
-			break;
-		}
-
-		return type;
-	}
-
-	inline ActorValueModifier operator++(ActorValueModifier& type, int)
-	{
-		auto result = type;
-
-		switch (type)
-		{
-		case ActorValueModifier::kPermanent:
-			type = ActorValueModifier::kTemporary;
-			break;
-
-		case ActorValueModifier::kTemporary:
-			type = ActorValueModifier::kDamage;
-			break;
-		case ActorValueModifier::kDamage:
-			type = ActorValueModifier::kTotal;
-			break;
-
-		case ActorValueModifier::kTotal:
-			return result;
-		}
-
-		return result;
-	}
-
-	inline ActorValueModifier operator--(ActorValueModifier& type, int)
-	{
-		auto result = type;
-
-		switch (type)
-		{
-		case ActorValueModifier::kPermanent:
-			return result;
-			
-		case ActorValueModifier::kTemporary:
-			type = ActorValueModifier::kPermanent;
-			break;
-		case ActorValueModifier::kDamage:
-			type = ActorValueModifier::kTemporary;
-			break;
-
-		case ActorValueModifier::kTotal:
-			type = ActorValueModifier::kDamage;
-			break;
-		}
-
-		return result;
-	}
 
 }

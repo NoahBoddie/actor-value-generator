@@ -316,7 +316,7 @@ namespace AVG
 			if (!curr_delay)
 				return;
 
-			float new_delay = rec_data->recoveryDelay->RunImpl(owner);
+			float new_delay = rec_data->recoveryDelay(owner);
 
 			if (new_delay > *curr_delay) {
 				*curr_delay = new_delay;
@@ -434,7 +434,7 @@ namespace AVG
 			}
 
 			
-			float mod_value = recover_data->recoveryRate->RunImpl(owner);
+			float mod_value = recover_data->recoveryRate(owner);
 			
 			//Would be good to isolate this some how.
 			float current = GetValue(owner, entry.first, ExtraValueInput::Maximum, info);

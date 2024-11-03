@@ -104,24 +104,6 @@ namespace RGL
 		argument.Serialize(test_wrap);
 	}
 
-#define ALIAS_HEADER using Alias::Alias
-	
-	template <class MaskType>
-	struct ClassAlias : public MaskType
-	{
-		//This is a type that allows one to inherit and act as another class. basically a foothold for stuff like
-		// serial wrappers and such. I want to make another version of this that can hold the object instead of inheriting from it
-		// to be used with final classes.
-		using Base = MaskType;
-		using MaskType::MaskType;
-		using Alias = ClassAlias;
-
-		//These are in the wrong place
-		ClassAlias() = default;
-		ClassAlias(std::string& a_rhs) { static_cast<Base&>(*this) = a_rhs; }
-		ClassAlias(std::string&& a_rhs) { static_cast<Base&>(*this) = a_rhs; }
-	};
-
 	//I'd like the break this down into a "copy class", that does all this stuff, but doesn't need me to implement anything.
 	// You then use a macro that comes from it, and you get everything you need without any set up. Should also be able to alias
 	// things it doesn't own.

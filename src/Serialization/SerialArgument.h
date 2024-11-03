@@ -6,9 +6,9 @@
 #include "Serialization/SerializableObject.h"
 //#include "SerializingWrapper.h"
 //free_rul::serializing
-#include "RoguesGallery/TemporaryFlag.h"
 
-#include "Arthmetic/ArthmeticUtility.h"
+
+
 
 
 namespace AVG
@@ -37,7 +37,9 @@ namespace RGL
 	template<bool Insensitive = false>
 	constexpr string_hash serial_hash(const std::string_view view) noexcept
 	{
-		string_hash raw_hash = Arthmetic::hash<Insensitive>(view.data(), view.size());
+		constexpr HashFlags flag = Insensitive ? HashFlags::Insensitive : HashFlags::None;
+
+		string_hash raw_hash = Hash<flag>(view.data(), view.size());
 
 		return serial_hash_integer(raw_hash);
 	}
@@ -67,7 +69,7 @@ namespace RGL
 		{
 			TypeHash _hash{};
 
-			_hash.code = Arthmetic::hash(arg);
+			_hash.code = Hash(arg);
 
 			return _hash;
 		}
@@ -158,36 +160,7 @@ namespace RGL
 		constexpr auto type_name_length = wrapped_name.length() - prefix_length - suffix_length;
 		return wrapped_name.substr(prefix_length, type_name_length);
 	}
-
-	template<typename T>
-	struct TypeName {
 	
-		constexpr static std::string_view fullname_intern() {
-#if defined(__clang__) || defined(__GNUC__)
-			return __PRETTY_FUNCTION__;
-#elif defined(_MSC_VER)
-			return __FUNCSIG__;
-#else
-#error "Unsupported compiler"
-#endif
-		}
-		constexpr static std::string_view name() {
-			//Future needs for get name would be removed specialization if I can work that in.
-			return type_name<T>();
-
-			size_t prefix_len = TypeName<void>::fullname_intern().find("void");
-			size_t multiple = TypeName<void>::fullname_intern().size() - TypeName<int>::fullname_intern().size();
-			size_t dummy_len = TypeName<void>::fullname_intern().size() - 4 * multiple;
-			size_t target_len = (fullname_intern().size() - dummy_len) / multiple;
-			std::string_view rv = fullname_intern().substr(prefix_len, target_len);
-			if (rv.rfind(' ') == rv.npos)
-				return rv;
-			return rv.substr(rv.rfind(' ') + 1);
-		}
-
-	public:
-		constexpr static std::string_view value = name();
-	};
 
 	struct DefaultSerialize;
 	
@@ -350,9 +323,7 @@ namespace RGL
 		static constexpr inline TypeHash acceptAll = TypeHash::RawHash(0xFFFFFFFF);
 	};
 
-	//This function requires definition elsewhere basically.
-	inline uint32_t GetProjectVersion();
-
+	
 	//Make a get hash code function maybe?
 	// Hash codes can change, you need to make a manual serialize hash code, but I sorely want the hash to be something
 	// that doesn't change, but also something that sticks based on intent. So probably something quite manually
@@ -438,6 +409,25 @@ namespace RGL
 		};
 
 
+		struct DepthDelegate
+		{
+			inline void operator()(bool& is_valid, SerialArgument& focus, uint8_t& original_value, uint8_t set_value)
+			{
+				original_value = focus._depth;
+				logger::info("Start: {} -> {}", original_value, set_value + original_value);
+
+				focus.ModDepth(set_value);
+			}
+
+			inline void operator()(SerialArgument& focus, uint8_t& original_value, uint8_t set_value)
+			{
+				logger::info("Finish: {} -> {}", focus._depth, focus._depth - set_value);//Log these.
+
+				focus.ModDepth(-set_value);
+			}
+		};
+
+		//I keep these.
 		static void DepthFlagStart(bool& is_valid, SerialArgument& focus, uint8_t& original_value, uint8_t set_value)
 		{
 			original_value = focus._depth;
@@ -472,7 +462,7 @@ namespace RGL
 		
 		
 		using SerializableLockFlag = TemporaryFlag::Variable<bool>;
-		using SerializationDepthFlag = TemporalFlag<SerialArgument, uint8_t, DepthFlagStart, DepthFlagFinish>;
+		using SerializationDepthFlag = TempFlag<SerialArgument, uint8_t, DepthDelegate>;
 		using OpenRecordFlag = TemporaryFlag::Variable<bool>;
 
 
@@ -541,7 +531,8 @@ namespace RGL
 		constexpr bool IsFinished() noexcept { return Any(serialState, SerializingState::Finished); }
 
 		SKSE::SerializationInterface* serialInterface;
-		std::uint32_t interfaceVersion = GetProjectVersion();
+		//std::uint32_t interfaceVersion = GetProjectVersion();
+		std::uint32_t interfaceVersion = SKSE::PluginDeclaration::GetSingleton()->GetVersion().pack();
 		SerializingState serialState;
 
 		SerialArgument(SKSE::SerializationInterface* enter_face, SerializingState state)

@@ -1,7 +1,7 @@
 {
     "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
-    "name": "actor-value-extension",
-    "version-string": "1.0.0",
+    "name": "actor-value-generator",
+    "version-string": "2.0.0.0",
     "port-version": 0,
     "description": "An SKSE modding tool that enables users to make new actor values as well as extending their existing functionally.",
     "homepage": "https://www.skyrimng.com",
@@ -39,13 +39,13 @@
         "tests": {
             "description": "Build tests for the SKSE plugin.",
             "dependencies": [
-                {
-                    "name": "actor-value-extension",
-                    "default-features": false,
-                    "features": [
-                        "plugin"
-                    ]
-                },
+              {
+                "name": "actor-value-generator",
+                "default-features": false,
+                "features": [
+                  "plugin"
+                ]
+              },
                 "catch2"
             ]
         }

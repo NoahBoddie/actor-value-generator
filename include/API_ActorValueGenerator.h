@@ -2,7 +2,7 @@
 
 //#include <string_view>
 
-
+//Roughly everything about this should fucking die.
 
 #define ARTH_OBJECT_TYPE RE::TESForm
 #define ARTH_CONTEXT_TYPE RE::ExtraDataList
@@ -11,7 +11,7 @@
 #define ARITHMETIC_API_SOURCE "ActorValueExtension.dll"
 #define ARITHMETIC_API_SOURCE_L L"ActorValueExtension.dll"
 
-#include <API_Arithmetic.h>
+
 
 
 
@@ -20,7 +20,7 @@ namespace ActorValueGeneratorAPI
 	struct ExportSetData
 	{
 		using CString = const char*;
-		using StringContainer = ABIContainer<CString>;
+		using StringContainer = std::vector<CString>;
 
 		RE::Actor*					target{ nullptr };	//Targeted change of the AV.
 		RE::Actor*					cause{ nullptr };	//Used when damage happens

@@ -82,7 +82,7 @@ namespace AVG
 			}
 
 			RE::TESConditionItem* item = condition.head;
-			logger::info("~{:X}", (uintptr_t)item);
+
 			while (item != nullptr) {
 				RE::FUNCTION_DATA& function_data = item->data.functionData;
 
@@ -96,7 +96,7 @@ namespace AVG
 				case RE::FUNCTION_DATA::FunctionID::kGetBaseActorValue:
 					//logger::info("THRILL, {}", function_data.params[0]);
 				{
-					VoidCaster<RE::ActorValue> stored_av = function_data.params[0];
+					RE::ActorValue stored_av = static_cast<RE::ActorValue>(reinterpret_cast<uintptr_t>(function_data.params[0]));
 					
 
 					//if (log)
@@ -106,9 +106,8 @@ namespace AVG
 					//if (stored_av._b > RE::ActorValue::kTotal || (int)stored_av._b < 0)
 					//	logger::debug("processing {} form type {}, with a value of {}", form->GetName(), (int)form->GetFormType(), (int)stored_av._b);
 
-
-					stored_av = ValueAliasHandler::AliasToValue(stored_av, form, change_num);
-					function_data.params[0] = stored_av;
+					change_num += AliasToValue(form, stored_av);
+					
 					
 					//if (reinterpret_cast<uintptr_t>(function_data.params[0]) == static_cast<uintptr_t>(RE::ActorValue::kVariable01)) {
 					//	function_data.params[0] = reinterpret_cast<void*>(new_av);
@@ -138,15 +137,15 @@ namespace AVG
 				switch (effect_data.archetype)
 				{
 				case Archetype::kDualValueModifier:
-					effect_data.secondaryAV = ValueAliasHandler::AliasToValue(effect_data.secondaryAV, form, successes, AliasQuerySettings::RequireSetting);
+					successes += AliasToValue(form, effect_data.secondaryAV, QuerySettings::RequireSetting);
 					[[fallthrough]];
 				//Forgot accumulating.
 				case Archetype::kValueModifier:
 				case Archetype::kPeakValueModifier:
-					effect_data.primaryAV = ValueAliasHandler::AliasToValue(effect_data.primaryAV, form, successes, AliasQuerySettings::RequireSetting);
+					successes += AliasToValue(form, effect_data.primaryAV, QuerySettings::RequireSetting);
 					[[fallthrough]];
 				default:
-					effect_data.resistVariable = ValueAliasHandler::AliasToValue(effect_data.resistVariable, form, successes, AliasQuerySettings::AllowNone);
+					successes += AliasToValue(form, effect_data.resistVariable, QuerySettings::AllowNone);
 					break;
 				}
 
@@ -193,7 +192,9 @@ namespace AVG
 					if (!function_data)
 						continue;
 
-					RE::ActorValue new_av = ValueAliasHandler::AliasToValue(static_cast<RE::ActorValue>(function_data->data1), form, successes);
+					RE::ActorValue new_av = static_cast<RE::ActorValue>(function_data->data1);
+
+					successes += AliasToValue(form, new_av);
 					
 					function_data->data1 = static_cast<float>(new_av);
 					
@@ -231,8 +232,33 @@ namespace AVG
 			else IF_FORM(RE::TESObjectWEAP)
 			{
 				auto& weapon_data = form->weaponData;
-				weapon_data.resistance = ValueAliasHandler::AliasToValue(*weapon_data.resistance, form, successes,
-					AliasQuerySettings::AllowNone);
+				
+				auto value = *weapon_data.resistance;
+
+				successes += AliasToValue(form, value, QuerySettings::AllowNone);
+
+				weapon_data.resistance = value;
+
+				//////////////////////
+
+#ifdef SKILL_2_0
+				value = *weapon_data.skill;
+
+				successes += AliasToValue(form, value);
+
+				weapon_data.resistance = value;
+
+				///////////////////////
+
+
+				value = *weapon_data.embeddedWeaponAV;
+
+				successes += AliasToValue(form, value);
+
+				weapon_data.embeddedWeaponAV = value;
+#endif
+
+				
 				//weapon_data.skill = ValueAliasHandler::AliasToValue(*weapon_data.skill, form);//Disabled for now
 				
 				//Embed isn't used so maybe not needed. But just in case someone does have something of the like.
@@ -305,26 +331,42 @@ namespace AVG
 
 				if constexpr (is_enchant || is_spell)
 				{
-					constexpr RE::ActorValue right_expect = is_enchant ? RE::ActorValue::kRightItemCharge : RE::ActorValue::kMagicka;
-					constexpr RE::ActorValue left_expect = is_enchant ? RE::ActorValue::kLeftItemCharge : RE::ActorValue::kMagicka;
-
-					RE::ActorValue right_hand;
-					RE::ActorValue left_hand;
 
 					if constexpr (is_enchant) {
 						if (form->GetCastingType() == RE::MagicSystem::CastingType::kConstantEffect)
 							return successes;
-						//RequireSetting
-						right_hand = ValueAliasHandler::AliasToValue(RE::ActorValue::kRightItemCharge, cost_effect, successes,
-							AliasQuerySettings::IgnorePlugin, AliasQuerySettings::RequireCost);
-						left_hand = ValueAliasHandler::AliasToValue(RE::ActorValue::kLeftItemCharge, cost_effect, successes,
-							AliasQuerySettings::IgnorePlugin, AliasQuerySettings::RequireCost);
+					}
+
+					constexpr RE::ActorValue right_expect = is_enchant ? RE::ActorValue::kRightItemCharge : RE::ActorValue::kMagicka;
+					constexpr RE::ActorValue left_expect = is_enchant ? RE::ActorValue::kLeftItemCharge : RE::ActorValue::kMagicka;
+
+					RE::ActorValue general = RE::ActorValue::kNone;
+					RE::ActorValue right_hand = RE::ActorValue::kNone;
+					RE::ActorValue left_hand = RE::ActorValue::kNone;
+
+
+					successes += AliasToValue(form, VirtualValue::kCost, general, QuerySettings::RequireSetting | QuerySettings::IgnorePlugin);
+					
+					bool trigger = AliasToValue(form, VirtualValue::kLeftCost, left_hand, QuerySettings::RequireSetting | QuerySettings::IgnorePlugin);
+
+					if (!trigger) {
+						left_hand = general;
+						
 					}
 					else {
-						right_hand = ValueAliasHandler::AliasToValue(RE::ActorValue::kMagicka, cost_effect, successes,
-							AliasQuerySettings::IgnorePlugin, AliasQuerySettings::RequireCost);
-						left_hand = right_hand;
+						successes++;
 					}
+
+					trigger = AliasToValue(form, VirtualValue::kRightCost, right_hand, QuerySettings::RequireSetting | QuerySettings::IgnorePlugin);
+
+					if (!trigger) {
+						right_hand = general;
+
+					}
+					else {
+						successes++;
+					}
+
 					
 					if (right_hand != right_expect)
 						form->pad74 = static_cast<uint32_t>(right_hand);
