@@ -321,7 +321,7 @@ namespace AVG
 		};
 
 
-		static void Create(std::string_view name, ExtraValueType type, const FileNode& node);
+		static void Create(std::string_view name, ExtraValueType type, const FileNode& node, bool legacy);
 
 		static constexpr DataID FunctionalID = 0xFFFFFFFF;
 
@@ -612,7 +612,7 @@ namespace AVG
 		RE::BSFixedString	GetFixedName() { return RE::BSFixedString(valueName.c_str()); }
 		RE::ActorValue		GetValueIDAsAV() { return static_cast<RE::ActorValue>(GetValueID()); }
 
-		virtual void LoadFromFile(const FileNode& node) = 0;
+		virtual void LoadFromFile(const FileNode& node, bool legacy) = 0;
 
 		virtual bool AllowsSetting() { return false; }
 
@@ -848,7 +848,7 @@ namespace AVG
 			//logger::info("{}", _dataID);
 		}
 
-		void LoadFromFile(const FileNode& node) override;
+		void LoadFromFile(const FileNode& node, bool legacy) override;
 
     };
 
@@ -1072,7 +1072,7 @@ namespace AVG
 			//Should do nothing atm.
 		}
 
-		void LoadFromFile(const FileNode& node) override;
+		void LoadFromFile(const FileNode& node, bool legacy) override;
 	};
 
 	

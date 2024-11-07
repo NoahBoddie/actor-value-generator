@@ -1,5 +1,10 @@
 #pragma once
 
+namespace RE
+{
+	using ActorValueModifier = RE::ACTOR_VALUE_MODIFIER;
+}
+
 namespace AVG
 {
 

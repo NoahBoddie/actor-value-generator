@@ -5,7 +5,7 @@
 
 namespace AVG
 {
-	void ExtraValueInfo::Create(std::string_view name, ExtraValueType type, const FileNode& node)
+	void ExtraValueInfo::Create(std::string_view name, ExtraValueType type, const FileNode& node, bool legacy)
 	{
 		std::array<std::unique_ptr<ExtraValueInfo>(*)(), ExtraValueType::Total> factory
 		{
@@ -18,7 +18,7 @@ namespace AVG
 
 		info->valueName = name;
 
-		info->LoadFromFile(node);
+		info->LoadFromFile(node, legacy);
 
 		if (1 == 1)
 		{
@@ -29,7 +29,7 @@ namespace AVG
 		}
 	}
 
-	void AdaptiveValueInfo::LoadFromFile(const FileNode& node)
+	void AdaptiveValueInfo::LoadFromFile(const FileNode& node, bool is_legacy)
 	{
 		auto& table = *node.as_table();
 
@@ -57,8 +57,8 @@ namespace AVG
 		if (!no_rec)
 		{
 			_recovery = new RecoveryData();
-			_recovery->recoveryDelay = ValueFormula::Create(delay);//, "ActorValueGenerator::Commons");
-			_recovery->recoveryRate = ValueFormula::Create(rate);
+			_recovery->recoveryDelay = ValueFormula::Create(delay, is_legacy ? legacy : commons);//, "ActorValueGenerator::Commons");
+			_recovery->recoveryRate = ValueFormula::Create(rate, is_legacy ? legacy : commons);
 		}
 
 		if (auto* rec = GetRecoveryDataSafe(); rec && fixed) {
@@ -76,7 +76,7 @@ namespace AVG
 			{
 				auto* default_data = MakeDefaultDataSafe();
 
-				NULL_CONDITION(default_data)->defaultFunction = ValueFormula::Create(update_formula);
+				NULL_CONDITION(default_data)->defaultFunction = ValueFormula::Create(update_formula, is_legacy ? legacy : commons);
 
 
 				std::string default_type = (*default_table)["type"].value_or("Implicit");
@@ -222,7 +222,146 @@ namespace AVG
 
 
 
-	void FunctionalValueInfo::LoadFromFile(const FileNode& node)
+
+	bool NewInnerCheck(std::string_view mod, const toml::array& entry_array, std::string& out)
+	{
+		auto size = entry_array.size();
+		if (size < 2) {
+			//Needs more entries
+			return false;
+		}
+
+		constexpr std::string_view legacy_set = "AffectActorValue";
+
+		if (strnicmp(legacy_set.data(), entry_array[0].value_or(""), legacy_set.size()) != 0)
+		{
+			//Only AffectActorValue is supported
+			return false;
+		}
+
+		for (auto& entry : entry_array)
+		{
+			if (entry.is_string() == false)
+			{
+				//entry(X) isn't a string
+				return false;
+			}
+		}
+
+
+		std::string result = std::format("ModActorValue( '{}', ", entry_array[1].value_or(""));
+		
+		result += 'Base';
+
+		result += ", (to - from)";
+
+
+
+		if (size >= 3)
+		{
+			result += std::format(" * {}", entry_array[2].value_or("1"));
+		}
+
+		result += " )";
+
+		out = result;
+
+		return true;
+	}
+
+
+	std::string NewOuterCheck(std::string_view mod, const toml::array& entry_array)
+	{
+		std::string result;
+
+		bool expect_string = true;
+
+		int encountered_string = 0;
+
+		for (size_t i = 0; i < entry_array.size(); i++)
+		{
+			auto& entry = entry_array[i];
+			auto entry_type = entry.type();
+
+			if (entry_type == toml::node_type::array)
+			{
+
+				std::string buf;
+				if (NewInnerCheck(mod, *entry.as_array(), buf) == true)
+				{
+					if (!expect_string) {
+						result += " => " + buf;
+					}
+					else
+					{
+						result = buf;
+					}
+					//do something with buffer.
+				}
+
+				expect_string = false;
+			}
+			else if (entry_type == toml::node_type::string)
+			{
+				if (!expect_string) {
+					//log something in error
+					continue;
+				}
+
+
+				encountered_string++;
+			}
+
+
+		}
+
+		if (expect_string)
+		{
+			if (NewInnerCheck(mod, entry_array, result) == true)
+			{
+				//say something
+			}
+		}
+
+		return result;
+	};
+
+
+	void HandleSetNode(FileView entry, std::string_view modifier, std::string& out, bool legacy)
+	{
+
+		//Do this regardless of legacy
+		if (auto p_test = entry.as_array(); p_test)
+		{
+			auto& a_array = *p_test;
+
+			
+
+			//Make modifier a string instead, I'll be getting that value anyways so best to just handle it there.
+			std::string buffer = NewOuterCheck(modifier, a_array);
+			
+			
+			if (!buffer.empty()) {
+				if (legacy){
+					out = std::move(buffer);
+					logger::debug("Legacy Routine created: {}", out);
+				}
+				else{
+					logger::warn("Set function format no longer supported, use single line formulas instead. Formats to:\n{}", buffer);
+				}
+
+			}
+		}
+		else if (entry.is_string() == true)
+		{
+			out = entry.value_or("");
+		}
+	}
+
+
+
+
+	void FunctionalValueInfo::LoadFromFile(const FileNode& node, bool is_legacy)
 	{
 
 		auto& table = *node.as_table();
@@ -239,6 +378,8 @@ namespace AVG
 		using NodeType = decltype(node_type_G);
 
 		bool is_readonly = false;
+
+
 
 		switch (node_type_G)
 		{
@@ -273,10 +414,10 @@ namespace AVG
 		{
 			auto& set_table = *set_info.as_table();
 
-			set_strings[ActorValueModifier::kTotal] = set_table["base"].value_or("");
-			set_strings[ActorValueModifier::kPermanent] = set_table["permanent"].value_or("");
-			set_strings[ActorValueModifier::kTemporary] = set_table["temporary"].value_or("");
-			set_strings[ActorValueModifier::kDamage] = set_table["damage"].value_or("");
+			HandleSetNode(set_table["base"], "'base'", set_strings[ActorValueModifier::kTotal], is_legacy);
+			HandleSetNode(set_table["permanent"], "'permanent'", set_strings[ActorValueModifier::kPermanent], is_legacy);
+			HandleSetNode(set_table["temporary"], "'temporary'", set_strings[ActorValueModifier::kTemporary], is_legacy);
+			HandleSetNode(set_table["damage"], "'damage'", set_strings[ActorValueModifier::kDamage], is_legacy);
 		}
 		break;
 
@@ -287,6 +428,10 @@ namespace AVG
 			set_strings[ActorValueModifier::kTotal] = set_string.get();
 		}
 		break;
+
+		case NodeType::array:
+			HandleSetNode(set_info, "'base'", set_strings[ActorValueModifier::kTotal], is_legacy);
+			break;
 		}
 
 
@@ -301,7 +446,7 @@ namespace AVG
 			{
 				if (get_strings[mod] != "") {
 					logger::debug("making {}", get_strings[mod]);
-					_get[mod] = ValueFormula::Create(get_strings[mod]);
+					_get[mod] = ValueFormula::Create(get_strings[mod], is_legacy ? legacy : commons);
 					_getFlags |= ModifierToValueInput(mod);
 				}
 
@@ -311,17 +456,17 @@ namespace AVG
 
 			for (ActorValueModifier mod = ActorValueModifier::kPermanent; mod <= ActorValueModifier::kTotal; mod++)
 			{
-				//For there to be a set there, there must be a coresponding get function
-				if (!(ModifierToValueInput(mod) & _getFlags)) {
-					logger::info("corresponding get function must exist for set function.");
-					continue;
-				}
-
-				//For there to be a set, there must be a get. Note that.
 				if (set_strings[mod] == "")
 					continue;
 
-				_set[mod] = SetFormula::Create("cause", "from", "to", set_strings[mod]);
+				
+				//For there to be a set there, there must be a coresponding get function
+				if (!(ModifierToValueInput(mod) & _getFlags)) {
+					logger::info("corresponding get function must exist for set function.");//state which are in error
+					continue;
+				}
+				
+				_set[mod] = SetFormula::Create("cause", "from", "to", set_strings[mod], is_legacy ? legacy : commons);
 
 				_setFlags |= ModifierToValueInput(mod);
 

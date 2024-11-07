@@ -49,8 +49,9 @@ set(sources
         src/Serialization/SerializingWrapper.h
 
       
-
+        
         src/Types.h
+        src/LegacyFunctions.h
         src/ExtraValue.h
         src/BGSEntryPointFunctionDataTwoValue.h
         src/main.cpp

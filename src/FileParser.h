@@ -327,7 +327,6 @@ namespace AVG
 		enum Mode
 		{
 			kType,
-			kScope,
 			kValue,	//Dealing withe the value depends on the situation
 		};
 
@@ -347,9 +346,9 @@ namespace AVG
 
 		//We can tell if it's an editor id if it 
 
-		char search_char = ' ';
+		char search_char = ':';
 
-		while (mode <= kValue && std::getline(stream, into, ' ')) {
+		while (mode <= kValue && std::getline(stream, into, search_char)) {
 			//Do stuff.
 			if (into.empty())
 				continue;
@@ -357,33 +356,39 @@ namespace AVG
 			switch (mode)
 			{
 			case kType:
+				//This should clear any spaces if there are any.
+				//into = into.substr(0, into.find(' '));
+				boost::trim(into);
+
 				switch (RGL::Hash<RGL::HashFlags::Insensitive>(into))
 				{
-				case "Object:"_ih:
-					mode++;
 				case "Object"_ih:
 					type = "Form"; break;
-				case "Number:"_ih:
-					mode++;
+
 				case "Number"_ih:
 					type = "float"; break;
-				case "String:"_ih:
-					mode++;
+
 				case "String"_ih:
 					type = "string"; break;
+
 				default:
 					logger::error("{} is not a valid legacy AVG type.", into);
 					return false;
 				}
+				search_char = '\0';
 				break;
-				//search_char = '\0';
 			
 			case kValue:
 				switch (RGL::Hash(type))
 				{
 				case "Form"_h:
 				{
-					
+					//If you wanted to do this you'd probably try to reverse find space and substring that and end,
+					// and then do the same thing you did above. For now, this will do.
+					logger::info("before '{}'", into);
+					boost::trim(into);
+					logger::info("after '{}'", into);
+
 					if (strnicmp(into.c_str(), "0x", 2) == 0)
 					{
 						value = " = LookupByFormID(" + into + ")";
@@ -399,11 +404,14 @@ namespace AVG
 					if (std::getline(stream, buf, ':') && stream.get() == ':')
 					{
 						//check the next part of the stream for 
-
+						boost::trim(buf);
+						
 						value = " = LookupByLocalID( '" + buf + "' , ";
 
 						if (std::getline(stream, buf))
 						{
+							boost::trim(buf);
+
 							value += buf + " )";
 						}
 						else
@@ -414,7 +422,7 @@ namespace AVG
 					}
 					else
 					{
-						value = " = LookupByEditorID( '" + into + "' );";
+						value = " = LookupByEditorID( '" + into + "' )";
 					}
 				}
 				break;
@@ -453,10 +461,8 @@ namespace AVG
 		enum Mode
 		{
 			kName,
-			kEqual,
 			kType,
-			kScope,
-			kDefault
+			kDefault,
 		};
 
 		std::string name;
@@ -473,7 +479,9 @@ namespace AVG
 		Mode mode = kName;
 		bool cont = true;
 
-		while (cont && std::getline(stream, into, ' ')) {
+		char search_char = '=';
+
+		while (cont && std::getline(stream, into, search_char)) {
 			//Do stuff.
 			if (into.empty())
 				continue;
@@ -481,46 +489,39 @@ namespace AVG
 			switch (mode)
 			{
 			case kName:
-				name = into; break;
-
-			case kEqual:
-				//Consume and throw away
-
-				if (into != "=") {
-					logger::error("expected '=' found '{}'.", into);
+				boost::trim(into);
+				
+				if (into.contains(' ') == true) {
+					logger::error("Parameter string '{}' is not a valid.", into);
 					return false;
 				}
+					
+			
+				name = into; 
+				
+				search_char = ':';
+
 				break;
-
-			case kScope:
-				//Consume and throw away
-
-				if (into != ":") {
-					logger::error("expected ':' found '{}'.", into);
-					return false;
-				}
-				break;
-
 
 			case kType:
+				boost::trim(into);
+
 				switch (RGL::Hash<RGL::HashFlags::Insensitive>(into))
 				{
-				case "Object:"_ih:
-					mode++;
 				case "Object"_ih:
 					type = "Form"; break;
-				case "Number:"_ih:
-					mode++;
+				
 				case "Number"_ih:
 					type = "float"; break;
-				case "String:"_ih:
-					mode++;
+				
 				case "String"_ih:
 					type = "string"; break;
 				default:
 					logger::error("{} is not a valid legacy AVG type.", into);
 					return false;
 				}
+				search_char = '\0';
+
 				break;
 			
 
@@ -547,9 +548,194 @@ namespace AVG
 		return true;
 	}
 
+
+	bool HandleLegacySetFunc(std::string& out, RE::ActorValueModifier modifier)
+	{
+		//This will have to do a version check to make sure that it can handle something like default parameters if we ever get to that point.
+		enum Mode
+		{
+			kName,
+			kType,
+			kDefault,
+		};
+
+		std::string name;
+
+		std::string type;
+
+		//std::string def;
+
+
+
+		std::istringstream stream{ out };
+		std::string into;
+
+		Mode mode = kName;
+		bool cont = true;
+
+		char search_char = '=';
+
+		while (cont && std::getline(stream, into, search_char)) {
+			//Do stuff.
+			if (into.empty())
+				continue;
+
+			switch (mode)
+			{
+			case kName:
+				boost::trim(into);
+
+				if (into.contains(' ') == true) {
+					logger::error("Parameter string '{}' is not a valid.", into);
+					return false;
+				}
+
+
+				name = into;
+
+				search_char = ':';
+
+				break;
+
+			case kType:
+				boost::trim(into);
+
+				switch (RGL::Hash<RGL::HashFlags::Insensitive>(into))
+				{
+				case "Object"_ih:
+					type = "Form"; break;
+
+				case "Number"_ih:
+					type = "float"; break;
+
+				case "String"_ih:
+					type = "string"; break;
+				default:
+					logger::error("{} is not a valid legacy AVG type.", into);
+					return false;
+				}
+				search_char = '\0';
+
+				break;
+
+
+			case kDefault:
+				//std::getline(stream, into); Later, this might take the entire thing and just put it on there.
+				//def = " = " + into;
+				cont = false;
+				break;
+			}
+
+			mode++;
+
+		}
+
+		if (mode < kType) {
+			logger::error("Cannot convert legacy parameter '{}'.", into);
+			return false;
+		}
+
+		out = std::format("{} {}", type, name);
+
+		//if we didn't make it to default print the name and say it's not valid.
+
+		return true;
+	}
+
+
+	void temp_ArrayCheck(FunctionalValueInfo* info, RE::ACTOR_VALUE_MODIFIER mod, const toml::array& entry_array, bool allow_array)
+	{
+		toml::node_type internal_type = toml::node_type::none;
+
+		std::string name;
+
+		std::vector<std::string> results{};
+
+
+		for (size_t i = 0; i < entry_array.size(); i++)
+		{
+			auto entry_type = entry_array[i].type();
+
+			if (internal_type == toml::node_type::none) {
+				switch (entry_type)
+				{
+				case toml::node_type::array:
+					if (!allow_array) {
+						//arrays not allowed, but that's just one function down, not fatal.
+						continue;
+					}
+					[[fallthrough]];
+				case toml::node_type::string:
+					internal_type = entry_type;
+					break;
+
+				default:
+					//Error, wrong type detected. Parser throw?
+					// Hard to know what if this is even an array of strings or array of arrays yet. is here, so fatal.
+					return;
+				}
+			}
+
+			if (entry_type != internal_type) {
+				//Log error here.
+				//std::string str = view.value_or("");
+				//info->AddSetFunction("", mod, {});
+
+				//We'll allow this to be a persisting value, but make sure it's known that it's invalid.
+				if (internal_type == toml::node_type::string)
+					results.push_back(entry_array[i].value_or("invalid"));
+
+				return;
+			}
+
+			switch (entry_type)
+			{
+			case toml::node_type::array:
+				temp_ArrayCheck(info, mod, *entry_array[i].as_array(), false);
+				break;
+
+			case toml::node_type::string:
+				if (!i)
+					name = entry_array[i].value_or("");
+				else
+					results.push_back(entry_array[i].value_or("invalid"));
+				break;
+			}
+
+		}
+
+		if (internal_type == toml::node_type::string) {
+			info->AddSetFunction(name, mod, results);
+		}
+	};
+
+	void temp_HandleSetBranch(FunctionalValueInfo* info, RE::ACTOR_VALUE_MODIFIER mod, const toml::v3::node& view)
+	{
+		auto node_type = view.type();
+		
+		using NodeType = decltype(node_type);
+		
+		
+		switch (node_type)
+		{
+		case NodeType::string:
+			logger::error("Not allowed");
+			break;
+
+		case NodeType::array:
+			temp_ArrayCheck(info, mod, *view.as_array(), true);
+			break;
+		}
+		logger::debug("D");
+	}
+
+
+
+
+
 //#define APPEND_SCRIPT_EXISTS
 
-	void HandleFileInput(std::string& name, const FileNode& node)
+	void HandleFileInput(std::string& name, const FileNode& node, bool is_legacy)
 	{
 		//Doesn't work, seems to only get testEV, maybe my choice isn't entirely set up properly?
 
@@ -611,8 +797,15 @@ namespace AVG
 					if (value == "")
 						continue;
 					
-					if (HandleLegacyGlobal(value, property_name) == true)
-						logger::warn("Properties through AVG no longer supported, use Lexicon scripts instead. formatted:\n{}", value);
+					if (HandleLegacyGlobal(value, property_name) == true) {
+						if (is_legacy) {
+							legacy->AppendContent(value);
+							logger::debug("Legacy property created: {}", value);
+						}
+						else {
+							logger::warn("Properties through AVG no longer supported, use Lexicon scripts instead. Formatted to:\n{}", value);
+						}
+					}
 				}
 				return;
 			}
@@ -623,6 +816,7 @@ namespace AVG
 			ExtraValueType ev_type;
 			switch (RGL::Hash<RGL::HashFlags::Insensitive>(type))
 			{
+		
 			case "Routine"_ih:
 			{
 				std::string parameters;
@@ -688,7 +882,14 @@ namespace AVG
 
 				std::string to_append = std::format("{} float {}(this Actor{}){}", native, name, parameters, body);
 
-				logger::warn("Routines through AVG no longer supported, use Lexicon scripts instead. formated:\n{}", to_append); break;
+				if (is_legacy) {
+					legacy->AppendContent(to_append);
+					logger::debug("Legacy Routine created: {}", to_append);
+				}
+				else {
+					logger::warn("Routines through AVG no longer supported, use Lexicon scripts instead. Formats to:\n{}", to_append);
+			
+				}
 
 				return;
 			}
@@ -705,7 +906,7 @@ namespace AVG
 				ev_type = ExtraValueType::Functional;
 
 				create_ev:
-				ExtraValueInfo::Create(name, ev_type, table);
+				ExtraValueInfo::Create(name, ev_type, table, legacy);
 				break;
 
 			
@@ -726,5 +927,5 @@ namespace AVG
 			logger::error("{} is neither single nor composite type.", name);
 		}
 
-		}
+	}
 }

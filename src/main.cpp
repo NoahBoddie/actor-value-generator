@@ -15,14 +15,13 @@
 
 #include "FileParser.h"
 
+#include "LegacyFunctions.h"
+
 using namespace RE::BSScript;
 using namespace AVG;
 using namespace SKSE;
 using namespace SKSE::log;
 using namespace SKSE::stl;
-
-
-
 
 
 
@@ -103,17 +102,101 @@ namespace {
 
     
 
-	static bool LoadFile(const std::string a_path)
+	static bool LoadFile(const std::string a_path, bool is_legacy)
 	{
 		try {
             //I wonder if this closes.
 			const auto table = toml::parse_file(a_path);
 
-			for (auto& [key, entry] : table) {
-				std::string name = key.data();  //This may not be null terminated, may want to switch over to string views at some point.
-				logger::info("Starting: {}-------------", name);
-				HandleFileInput(name, entry);
+			if (is_legacy)
+			{
+				using EntryRef = std::pair< const toml::key*, const toml::node*>;
+
+				std::vector<EntryRef> order{ table.size() };
+
+				//for (auto& [key, entry] : table) {
+				//	order.push_back(std::make_pair(&key, &entry));					
+				//}
+
+				std::transform(table.begin(), table.end(), order.begin(), [](auto&& pair)
+					{
+						return std::make_pair(&pair.first, &pair.second);
+					});
+
+				std::sort(order.begin(), order.end(), [](EntryRef& a, EntryRef& b) -> bool
+					{
+						switch (Hash<HashFlags::Insensitive>(a.first->data()))
+						{
+						case"Properties"_ih:
+							return true;
+						}
+
+						//*
+						auto test_a = a.second->as_table();
+						auto test_b = b.second->as_table();
+
+						if (!test_b)
+						{
+							return test_a;
+						}
+						else if (!test_a)
+						{
+							return false;
+						}
+						else
+						{
+							auto table_a = *test_a;
+							auto table_b = *test_b;
+
+							//constexpr std::string_view routine = "Routine";
+
+							bool func_a = stricmp("Routine", table_a["type"].value_or("")) == 0;
+							bool func_b = stricmp("Routine", table_b["type"].value_or("")) == 0;
+
+
+							if (!func_a)
+							{
+								return false;
+							}
+							else if (!test_b)
+							{
+								return func_a;
+							}
+						}
+
+						return false;
+						//*/
+						if (auto test = b.second->as_table(); test)
+						{
+							auto& table = *test;
+
+							std::string type = table["type"].value_or("Invalid");
+
+
+							switch (RGL::Hash<RGL::HashFlags::Insensitive>(type))
+							{
+							case "Routine"_ih:
+								return false;
+							}
+						}
+						
+						return true;
+					});
+
+				for (auto [key, entry] : order) {
+					std::string name = key->data();  //This may not be null terminated, may want to switch over to string views at some point.
+					logger::info("Starting: {}-------------", name);
+					HandleFileInput(name, *entry, is_legacy);
+				}
 			}
+			else {
+				for (auto& [key, entry] : table) {
+					std::string name = key.data();  //This may not be null terminated, may want to switch over to string views at some point.
+					logger::info("Starting: {}-------------", name);
+					HandleFileInput(name, entry, is_legacy);
+				}
+			}
+			
 
 		} catch (const toml::parse_error& e) {
 			//For now, I'm just gonna take the L
@@ -137,8 +220,14 @@ namespace {
 	
 	void PersonalLoad()
 	{
-		constexpr std::string_view core_path = "Data/SKSE/Plugins/ActorValueData";
-		std::vector<std::string> configs = get_configs(core_path, "_AVG", ".toml");
+		std::set<std::string> ignoreList;
+
+		constexpr std::string_view core_path = "Data/SKSE/Lexicon/Resources/ActorValueGenerator";
+
+
+
+		
+		std::vector<std::pair<std::string, std::string>> configs = LEX::SearchFiles(core_path, ".toml");
 
 		//Should register itself. Note, I really would like this to be a function instead of this on the outside doing this.
 	
@@ -146,12 +235,28 @@ namespace {
 		//new AdaptiveValueInfo(ev_name);
 		logger::info("Config Count: {}", configs.size());
 
-		for (auto& file_name : configs){
-			LoadFile(file_name);
+		for (auto& [path, file_name] : configs){
+			LoadFile(path + "/"+ file_name, false);
+
+			file_name.insert(file_name.size() - 5, "_AVG");
+
+			logger::info("Ignoring future {}", file_name);
+		}
+
+
+		//std::vector<std::string, std::string> configs = LEX::SearchFiles(core_path, "_AVG", ".toml");
+		constexpr std::string_view legacy_path = "Data/SKSE/Plugins/ActorValueData";
+
+		configs = LEX::SearchFiles(legacy_path, "_AVG.toml", ignoreList);
+
+
+		for (auto& [path, file_name] : configs) {
+			LoadFile(path + "/" + file_name, true);
 		}
 
 
 		logger::info("Finishing the manifest. . .");
+		AVG::Legacy::FormulaRegister();
 		ExtraValueInfo::FinishManifest();
 		HandleIncludeLists();
 		Hooks::Install();
@@ -209,67 +314,95 @@ namespace {
 	//*/
 
 
+	
 
 
 
-    void InitializeMessaging() {
-        if (!GetMessagingInterface()->RegisterListener([](MessagingInterface::Message* message) {
-            switch (message->type) {
-                // Skyrim lifecycle events.
-                case MessagingInterface::kPostLoad: // Called after all plugins have finished running SKSEPlugin_Load.
-					FormExtraValueHandler::Register();
-					//ArithmeticAPI::RequestInterface();
-					//ActorValueGeneratorAPI::RequestInterface();
-				    
-					if (LEX::ProjectManager::instance->CreateProject("ActorValueGenerator", nullptr) != LEX::APIResult::Success)
+
+
+	void InitializeLexiconMessaging()
+	{
+		using LEX::LinkFlag;
+
+		//If I can, I'd like to make an initialize script based around this.
+		if (LEX::LinkMessenger::instance->RegisterForLink([](LinkFlag flag) {
+
+
+			switch (flag) {
+				// Skyrim lifecycle events.
+			case LinkFlag::Loaded: // Called after all plugins have finished running SKSEPlugin_Load.
+				FormExtraValueHandler::Register();
+				//ArithmeticAPI::RequestInterface();
+				//ActorValueGeneratorAPI::RequestInterface();
+				{
+					LEX::IProject* avg = nullptr;
+
+					if (LEX::ProjectManager::instance->CreateProject("ActorValueGenerator", nullptr, avg) != LEX::APIResult::Success)
 					{
 						logger::info("AVG has experienced failure");
 					}
 
-					break;
-					// It is now safe to do multithreaded operations, or operations against other plugins.
-                
-				case MessagingInterface::kPostPostLoad: // Called after all kPostLoad message handlers have run.
-					
+					commons = avg->GetCommons();
 
-
-					break;
-
-                case MessagingInterface::kInputLoaded: // Called when all game data has been found.
-					PersonalLoad();
-					break;
-
-                case MessagingInterface::kDataLoaded: // All ESM/ESL/ESP plugins have loaded, main menu is now active.
-					FormExtraValueHandler::Initialize();
-                    InitializeHooking();
-					{
-						//auto testForm = LEX::Formula<float(RE::Actor::*)()>::Create("30 + (HasKeyword(props::PlayerKeyword) * 20) + GetActorValue2('StrengthAdaptive', props::All)");
-
-						//auto value = testForm(RE::PlayerCharacter::GetSingleton());
-						
-						commons = LEX::ProjectManager::instance->GetScriptFromPath("ActorValueGenerator::Commons");
-						//legacy = LEX::ProjectManager::instance->GetScriptFromPath("ActorValueGenerator::Commons");
-
-						logger::info("Project {}", LEX::Formula<float>::Run("GetPlayer().ProjectTest()", commons));
-
-						
-
+					if (avg) {
+						if (LEX::ProjectManager::instance->CreateScript(avg, "__Legacy__", "", "", legacy, std::vector<std::string_view>{"incremental"}) != LEX::APIResult::Success) {
+							logger::info("ETU* Legacy has failured to create");
+						}
 					}
-					
-                    break;
+				}
+				break;
 
-                // Skyrim game events.
-                case MessagingInterface::kNewGame: // Player starts a new game from main menu.
-                case MessagingInterface::kPreLoadGame: // Player selected a game to load, but it hasn't loaded yet.
-                    // Data will be the name of the loaded save.
-                case MessagingInterface::kPostLoadGame: // Player's selected save game has finished loading.
-                    // Data will be a boolean indicating whether the load was successful.
-					//logger::info("Loaded Now.");
+
+			case LinkFlag::Definition: // Called when all game data has been found.
+				PersonalLoad();
+				break;
+
+			case LinkFlag::External: // All ESM/ESL/ESP plugins have loaded, main menu is now active.
+				if (legacy->AppendContent("int test_legacy = 69;") == false)
+				{
+					logger::info("ETU* failure");
+				}
+				else {
+					logger::info("ETU* legacy >> {}", LEX::Formula<int>::Run("test_legacy * 1", legacy, 420));
+				}
+
+
+				FormExtraValueHandler::Initialize();
+				InitializeHooking();
+				{
+					//auto testForm = LEX::Formula<float(RE::Actor::*)()>::Create("30 + (HasKeyword(props::PlayerKeyword) * 20) + GetActorValue2('StrengthAdaptive', props::All)");
+
+					//auto value = testForm(RE::PlayerCharacter::GetSingleton());
+
+					commons = LEX::ProjectManager::instance->GetScriptFromPath("ActorValueGenerator::Commons");
+					//legacy = LEX::ProjectManager::instance->GetScriptFromPath("ActorValueGenerator::Commons");
+
+					logger::info("Project {}", LEX::Formula<float>::Run("GetPlayer().ProjectTest()", commons));
+
+
+
+				}
+
+				break;
+
+			}
+			})) {
+			stl::report_and_fail("Unable to register link messenger.");
+			throw nullptr;
+		}
+	}
+
+
+    void InitializeMessaging() {
+        
+		
+		if (!GetMessagingInterface()->RegisterListener([](MessagingInterface::Message* message) {
+            switch (message->type) {
+                // Skyrim lifecycle events.
+                case MessagingInterface::kPostLoad: // Called after all plugins have finished running SKSEPlugin_Load.
+					InitializeLexiconMessaging();
 					break;
-                case MessagingInterface::kSaveGame: // The player has saved a game.
-                    // Data will be the save name.
-                case MessagingInterface::kDeleteGame: // The player deleted a saved game from within the load menu.
-                    break;
+				
             }
         })) {
             stl::report_and_fail("Unable to register message listener.");
