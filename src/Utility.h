@@ -3,15 +3,35 @@
 namespace AVG
 {
 
+	constexpr bool kRightHand = true;
+	constexpr bool kLeftHand = false;
+
+
+
+
 	struct Utility
-	{	//SE: ???, AE: 0x3006808
+	{	
+		//static inline RE::Setting* 
+		
+		
+		//SE: ???, AE: 0x3006808
 		inline static float* g_deltaTime = (float*)REL::RelocationID(523660, 410199).address();
 
-		//SE: ???, AE: 0x3006808
-		inline static float* g_runTime = (float*)REL::RelocationID(523662, 410201).address();
+		
 
 		static float GetDeltaTime() { return *g_deltaTime; }
-		static float GetRunTime() { return *g_runTime; }
+		static uint32_t GetRunTime() 
+		{
+			static uint32_t* g_runTime = (uint32_t*)REL::RelocationID(523662, 410201).address();
+			return *g_runTime; 
+		}
+
+		static bool IsInBeastMode()
+		{
+			//2F4E920 / ???
+			static bool* address = (bool*)REL::RelocationID(519908, 000000000000000).address();
+			return *address;
+		}
 
 		//Reuse this to use numbers instead of just looking for exact value, gives more info that way.
 		static bool CharCmpI(char& c1, char& c2)
@@ -25,6 +45,12 @@ namespace AVG
 		{
 			return str1.size() == str2.size() &&
 				std::equal(str1.begin(), str1.end(), str2.begin(), CharCmpI);
+		}
+
+		inline static RE::ActorValue& GetCostSetting(RE::MagicItem* item, bool right_hand)//RE::MagicSystem::CastingSource source)
+		{
+			//This is supposed to return references. To make the checks a little easier.
+			return reinterpret_cast<RE::ActorValue&>(right_hand ? item->pad74 : item->pad84);
 		}
 
 
@@ -480,6 +506,7 @@ namespace AVG
 				CASE_OF_RETURN(Mass);
 				CASE_OF_RETURN(VoicePoints);
 				CASE_OF_RETURN(VoiceRate);
+				case"ArmorRating"_ih:
 				CASE_OF_RETURN(DamageResist);
 				CASE_OF_RETURN(PoisonResist);
 				case"FireResist"_ih:

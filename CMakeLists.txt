@@ -50,6 +50,7 @@ set(sources
 
       
         
+        src/ExtraNPC.h
         src/Types.h
         src/LegacyFunctions.h
         src/ExtraValue.h

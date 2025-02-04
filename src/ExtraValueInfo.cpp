@@ -10,7 +10,7 @@ namespace AVG
 		std::array<std::unique_ptr<ExtraValueInfo>(*)(), ExtraValueType::Total> factory
 		{
 			[]() -> std::unique_ptr<ExtraValueInfo> { return std::unique_ptr<ExtraValueInfo>{new AdaptiveValueInfo}; },
-			[]() -> std::unique_ptr<ExtraValueInfo> { return {}; },
+			[]() -> std::unique_ptr<ExtraValueInfo> { return std::unique_ptr<ExtraValueInfo>{new ExclusiveValueInfo}; },
 			[]() -> std::unique_ptr<ExtraValueInfo> { return std::unique_ptr<ExtraValueInfo>{new FunctionalValueInfo}; },
 		};
 
@@ -29,74 +29,12 @@ namespace AVG
 		}
 	}
 
-	void AdaptiveValueInfo::LoadFromFile(const FileNode& node, bool is_legacy)
+	void ExtraValueInfo::LoadFromFile(const FileNode& node, bool legacy)
 	{
 		auto& table = *node.as_table();
 
-		auto recovery_data = table["regen"];
 
-		std::string rate;
-		std::string delay;
-		bool fixed;
-
-		bool no_rec = false;
-
-		if (recovery_data.is_table() == false) {//!!recovery_data, this is a double negative, not an operator.
-			logger::info("No rec data");
-			no_rec = true;
-		}
-		else {
-			rate = recovery_data["rate"].value_or("");
-			delay = recovery_data["delay"].value_or("");
-			fixed = recovery_data["fixed"].value_or(false);
-
-			logger::info("Rec data rate: {}, delay: {}", rate, delay);
-			no_rec = rate == "";
-		}
-
-		if (!no_rec)
-		{
-			_recovery = new RecoveryData();
-			_recovery->recoveryDelay = ValueFormula::Create(delay, is_legacy ? legacy : commons);//, "ActorValueGenerator::Commons");
-			_recovery->recoveryRate = ValueFormula::Create(rate, is_legacy ? legacy : commons);
-		}
-
-		if (auto* rec = GetRecoveryDataSafe(); rec && fixed) {
-			rec->flags |= RecoveryData::Fixed;
-		}
-
-
-		auto default_table = table["default"].as_table();
-
-		if (default_table)
-		{
-			std::string update_formula = (*default_table)["formula"].value_or("");
-
-			if (update_formula != "")
-			{
-				auto* default_data = MakeDefaultDataSafe();
-
-				NULL_CONDITION(default_data)->defaultFunction = ValueFormula::Create(update_formula, is_legacy ? legacy : commons);
-
-
-				std::string default_type = (*default_table)["type"].value_or("Implicit");
-
-				switch (RGL::Hash<RGL::HashFlags::Insensitive>(default_type))
-				{
-				case "Implicit"_ih:
-					NULL_CONDITION(default_data)->_type = DefaultData::Implicit;
-					break;
-				case "Explicit"_ih:
-					NULL_CONDITION(default_data)->_type = DefaultData::Explicit;
-					break;
-				case "Constant"_ih:
-					NULL_CONDITION(default_data)->_type = DefaultData::Constant;
-					break;
-				}
-			}
-
-		}
-
+		displayName = table["displayName"].value_or("");
 
 		//Total is now the error alias value.
 		RE::ActorValue alias_value = Utility::StringToActorValue(table["alias"].value_or("Total"));
@@ -109,6 +47,7 @@ namespace AVG
 
 		if (auto plugin_test = table["plugins"].as_array(); Utility::IsValidValue(alias_value) && plugin_test)
 		{
+
 			auto& plugins = *plugin_test;
 
 			for (auto& a_node : plugins)
@@ -130,35 +69,41 @@ namespace AVG
 
 	}
 
+	void AdaptiveValueInfo::LoadFromFile(const FileNode& node, bool is_legacy)
+	{
+		adapt()->LoadFromFile(node, is_legacy);
+		ExtraValueInfo::LoadFromFile(node, is_legacy);
+	}
 
 
 
 
 
 
-	float AdaptiveValueInfo::GetExtraValue(RE::Actor* target, ExtraValueInput value_types)
+	///
+	float AdaptiveData::GetExtraValue(ExtraValueInfo* info, RE::Actor* target, ExtraValueInput value_types)
 	{
 		if (!target)
 			return 0;//I'd like to return NaN, with some additional information.
 
-		ExtraValueStorage& ev_store = ExtraValueStorage::GetCreateStorage(target);
+		ExtraValueStorage& ev_store = ExtraValueStorage::ObtainStorage(target);
 
-		return ev_store.GetValue(target, _dataID, value_types, this);
+		return ev_store.GetValue(target, info->GetDataID(), value_types, info);
 
 
 		//Needs to look up EVS, so this shit is just gonna wait for implementation.
 	}
 
-	bool AdaptiveValueInfo::SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier)
+	bool AdaptiveData::SetExtraValue(ExtraValueInfo* info, RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier)
 	{
 		if (!target)
 			return false;
 
-		ExtraValueStorage& ev_store = ExtraValueStorage::GetCreateStorage(target);
+		ExtraValueStorage& ev_store = ExtraValueStorage::ObtainStorage(target);
 
 		ExtraValueInput ev_mod = ExtraValueInput::None;
 
-		switch (modifier) 
+		switch (modifier)
 		{
 		case RE::ACTOR_VALUE_MODIFIER::kTotal:
 			ev_mod = ExtraValueInput::Base;
@@ -179,18 +124,18 @@ namespace AVG
 		default:
 			return false;
 		}
-		
-		ev_store.SetValue(target, _dataID, value, ev_mod, this);
+
+		ev_store.SetValue(target, info->GetDataID(), value, ev_mod, info);
 
 		return true;
 	}
 
-	bool AdaptiveValueInfo::ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier)
+	bool AdaptiveData::ModExtraValue(ExtraValueInfo* info, RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier)
 	{
 		if (!target)
 			return false;
 
-		ExtraValueStorage& ev_store = ExtraValueStorage::GetCreateStorage(target);
+		ExtraValueStorage& ev_store = ExtraValueStorage::ObtainStorage(target);
 
 		ExtraValueInput ev_mod = ExtraValueInput::None;
 
@@ -215,10 +160,140 @@ namespace AVG
 			return false;
 		}
 
-		ev_store.ModValue(target, aggressor, _dataID, value, ev_mod, this);
+		ev_store.ModValue(target, aggressor, info->GetDataID(), value, ev_mod, info);
 
 		return true;
 	}
+	
+	
+
+	void SkillfulData::LoadFromFile(const FileNode& node, bool is_legacy)
+	{
+		auto& table = *node.as_table();
+
+		auto skill_q = table["skill"];
+
+		if (skill_q.type() == toml::node_type::none){
+			logger::trace("No skill on ENTER NAME LATER");
+			return;
+		}
+
+
+		if (skill_q.is_boolean()) {
+			//Do stuff and leave.
+			
+			if (skill_q.value_or(false) == true)
+				ObtainSkillInfo().isAdvance = true;
+
+			return;
+		}
+
+		if (skill_q.is_table() == false) {
+			logger::warn("Invalid type {} used on skill.", magic_enum::enum_name(skill_q.type()));
+			return;
+		}
+
+		auto& skill_table = *skill_q.as_table();
+
+
+		auto& skill_info = ObtainSkillInfo();
+
+		//These are all gonna get WAY more complicated down the line. So enjoy this being simple for now.
+		// ALl of these need a global, setting, and formula set up. Which actually makes the skills set up useless?
+		skill_info.useMult = skill_table["useMult"].value_or(1.f);
+		skill_info.useOffset = skill_table["useOffset"].value_or(0.f);
+		skill_info.improveMult = skill_table["improveMult"].value_or(1.f);
+		skill_info.improveOffset = skill_table["improveOffset"].value_or(0.f);
+	
+		skill_info.increment = skill_table["increment"].value_or(1.f);
+		skill_info.grantsXP = skill_table["grantsXP"].value_or(true);
+
+	}
+
+
+	void AdaptiveData::LoadFromFile(const FileNode& node, bool is_legacy)
+	{
+		//Do SkillfulLoad first, then check if we have skilldata when trying to load default we present a failure
+
+		__super::LoadFromFile(node, is_legacy);
+
+		auto& table = *node.as_table();
+
+		auto recovery_data = table["regen"];
+
+		std::string rate;
+		std::string delay;
+		bool fixed = false;
+
+		bool no_rec = false;
+
+		if (recovery_data.is_table() == false) {//!!recovery_data, this is a double negative, not an operator.
+			logger::info("No rec data");
+			no_rec = true;
+		}
+		else {
+			rate = recovery_data["rate"].value_or("");
+			delay = recovery_data["delay"].value_or("");
+			fixed = recovery_data["fixed"].value_or(false);
+
+			logger::info("Rec data rate: {}, delay: {}", rate, delay);
+			no_rec = rate == "";
+		}
+
+		if (!no_rec)
+		{
+			auto rec = ObtainRecoverInfo();
+			rec->recoveryDelay = ValueFormula::Create(delay, is_legacy ? legacy : commons);//, "ActorValueGenerator::Commons");
+			rec->recoveryRate = ValueFormula::Create(rate, is_legacy ? legacy : commons);
+		}
+
+		if (auto* rec = GetRecoverInfo(); rec && fixed) {
+			rec->flags |= RecoverInfo::Fixed;
+		}
+
+
+
+		if (auto query = table["default"].as_table())
+		{
+			if (GetSkillInfo() != nullptr) {
+				logger::warn("Cannot load default info for a skill (this is a suggestion for right now, default values are hard to come by).");
+			}
+
+			auto& default_table = *query;
+
+			std::string update_formula = default_table["formula"].value_or("");
+
+			if (update_formula != "")
+			{
+				auto* default_data = ObtainDefaultInfo();
+
+				default_data->defaultFunction = ValueFormula::Create(update_formula, is_legacy ? legacy : commons);
+
+
+				std::string default_type = default_table["type"].value_or("Implicit");
+
+				switch (RGL::Hash<RGL::HashFlags::Insensitive>(default_type))
+				{
+				case "Implicit"_ih:
+					default_data->_type = DefaultInfo::Implicit;
+					break;
+				case "Explicit"_ih:
+					default_data->_type = DefaultInfo::Explicit;
+					break;
+				case "Constant"_ih:
+					default_data->_type = DefaultInfo::Constant;
+					break;
+				}
+			}
+
+		}
+	}
+
+	///
+
+
+
+
 
 
 
@@ -249,17 +324,18 @@ namespace AVG
 		}
 
 
-		std::string result = std::format("ModActorValue( '{}', ", entry_array[1].value_or(""));
+		std::string result = std::format("AffectActorValue( '{}', ", entry_array[1].value_or(""));
 		
-		result += 'Base';
+		result += mod;
 
-		result += ", (to - from)";
+		result += ", to, from";
 
 
 
 		if (size >= 3)
 		{
-			result += std::format(" * {}", entry_array[2].value_or("1"));
+			if (auto str = entry_array[2].value_or<const char*>(nullptr); str != nullptr)
+			result += std::format(", {} ", str);
 		}
 
 		result += " )";
@@ -360,8 +436,7 @@ namespace AVG
 
 
 
-
-	void FunctionalValueInfo::LoadFromFile(const FileNode& node, bool is_legacy)
+	void FunctionalData::LoadFromFile(const FileNode& node, bool is_legacy)
 	{
 
 		auto& table = *node.as_table();
@@ -435,19 +510,24 @@ namespace AVG
 		}
 
 
-		
+
 		{
 			//I would like this to have the job if appointing this to a list. It also copies the string given.
 
 			//Make these a function.
 			//RGL::Incl::operator++
-			
+
 			for (ActorValueModifier mod = ActorValueModifier::kPermanent; mod <= ActorValueModifier::kTotal; mod++)
 			{
 				if (get_strings[mod] != "") {
 					logger::debug("making {}", get_strings[mod]);
-					_get[mod] = ValueFormula::Create(get_strings[mod], is_legacy ? legacy : commons);
-					_getFlags |= ModifierToValueInput(mod);
+					if (_get[mod] = ValueFormula::Create(get_strings[mod], is_legacy ? legacy : commons)) {
+						_getFlags |= ModifierToValueInput(mod);
+					}
+					else {
+						auto name = mod == RE::ActorValueModifier::kTotal ? "Base" : magic_enum::enum_name(mod).substr(1);
+						logger::error("Failure to make get formula for {}:\n'{}'", name, get_strings[mod]);
+					}
 				}
 
 				if (mod == ActorValueModifier::kTotal)
@@ -459,23 +539,38 @@ namespace AVG
 				if (set_strings[mod] == "")
 					continue;
 
-				
+
 				//For there to be a set there, there must be a coresponding get function
 				if (!(ModifierToValueInput(mod) & _getFlags)) {
 					logger::info("corresponding get function must exist for set function.");//state which are in error
 					continue;
 				}
-				
-				_set[mod] = SetFormula::Create("cause", "from", "to", set_strings[mod], is_legacy ? legacy : commons);
 
-				_setFlags |= ModifierToValueInput(mod);
+				if (_set[mod] = SetFormula::Create("cause", "from", "to", set_strings[mod], is_legacy ? legacy : commons)) {
+					_setFlags |= ModifierToValueInput(mod);
+				}
+
+				else {
+					logger::error("Failure to make set formula for {}:\n'{}'", magic_enum::enum_name(mod), set_strings[mod]);
+				}
+
 
 
 			}
 		}
+	}
+	void FunctionalValueInfo::LoadFromFile(const FileNode& node, bool is_legacy)
+	{
+		function()->LoadFromFile(node, is_legacy);
+		ExtraValueInfo::LoadFromFile(node, is_legacy);
 
 
 		logger::info("Functional value {} created. Get: {:04B}, Set: {:04B}", GetName(), (int)GetFlags(), (int)SetFlags());
+
+
+		//In case this is important
+		/*
+		auto& table = *node.as_table();
 
 		RE::ActorValue alias_value = Utility::StringToActorValue(table["alias"].value_or("Total"));
 
@@ -510,5 +605,16 @@ namespace AVG
 		}
 
 		return;
+		//*/
+	}
+
+	void ExclusiveValueInfo::LoadFromFile(const FileNode& node, bool is_legacy)
+	{
+
+		adapt()->LoadFromFile(node, is_legacy);
+		function()->LoadFromFile(node, is_legacy);
+		ExtraValueInfo::LoadFromFile(node, is_legacy);
+
+
 	}
 }

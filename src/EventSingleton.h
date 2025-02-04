@@ -13,7 +13,8 @@ namespace AVG
 		public RE::BSTEventSink<RE::TESHitEvent>,
 		public RE::BSTEventSink<RE::TESResetEvent>,
 		public RE::BSTEventSink<RE::TESMagicEffectApplyEvent>,
-		public RE::BSTEventSink<RE::TESFormDeleteEvent>
+		public RE::BSTEventSink<RE::TESFormDeleteEvent>,
+		public RE::BSTEventSink<RE::MenuOpenCloseEvent>
 	{
 	public:
 		static EventSingleton* GetSingleton()
@@ -41,9 +42,11 @@ namespace AVG
 				//report this thing no exist?
 				return;
 			}
+			RE::UI* ui = RE::UI::GetSingleton();
 
 			//sourceHolder->AddEventSink<RE::TESHitEvent>(event_s);
 			sourceHolder->AddEventSink<RE::TESFormDeleteEvent>(event_s);
+			ui->AddEventSink<RE::MenuOpenCloseEvent>(event_s);
 			//sourceHolder->AddEventSink<RE::TESMagicEffectApplyEvent>(event_s);
 
 			logger::trace("Event Singleton successfully initialized.");
@@ -79,6 +82,23 @@ namespace AVG
 		//Move this to somewhere else.
 #pragma push_macro("GetObject")
 #undef GetObject
+
+
+		EventResult ProcessEvent(const RE::MenuOpenCloseEvent* a_event, RE::BSTEventSource<RE::MenuOpenCloseEvent>* a_eventSource) override
+		{
+			if (a_event->menuName == RE::StatsMenu::MENU_NAME && a_event->opening)
+			{
+				RE::UI* ui = RE::UI::GetSingleton();
+
+				auto stats_menu = ui->GetMenu<RE::StatsMenu>();
+				if (stats_menu)
+					logger::info("<*> Loaded stats: {}", stats_menu->GetRuntimeData().skillTrees.size());
+				else
+					logger::info("<*> Stats menu empty");
+			}
+
+			return EventResult::kContinue;
+		}
 
 		// some actions
 

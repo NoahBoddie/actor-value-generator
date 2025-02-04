@@ -1,64 +1,28 @@
-#pragma once
-
 #include "API_ActorValueGenerator.h"
 
 #include "ExtraValueInfo.h"
 
 
-namespace ActorValueGeneratorAPI
+namespace AVG::API
 {
-	using namespace AVG;
-
 	struct ActorValueGeneratorInterface : public CurrentInterface
 	{
 		Version GetVersion() override { return Version::Current; }
 
 
-		void RegisterExportFunction(std::string_view name, ExportFunction func) override
+		RE::ActorValue ResolveExtraValue(RE::ActorValue av) override
 		{
-			
-		}
+			if (av <= RE::ActorValue::kTotal || av ==  RE::ActorValue::kNone)
+				return av;
 
-		void CheckActorValue(RE::ActorValue& av, const char* c_str) override
-		{
-			if (av != RE::ActorValue::kNone && av != RE::ActorValue::kTotal)
-				return;
+			uint32_t id  = (uint32_t)av - (uint32_t)RE::ActorValue::kTotal;
 
-			std::string str = c_str;
-
-			//I'd like to put a lock here.
-
-			av = Utility::StringToActorValue(str);
-
-			if (Utility::IsValidValue(av) == true)
-				return;
-
-			std::string av_name = std::string(str);
-
-			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByName(av_name);
-
-			if (!info) {
-				logger::error("Attempts to find Actor Value for '{}' have failed.", str);
-				av = RE::ActorValue::kTotal;
-				return;
-			}
-
-			av = static_cast<RE::ActorValue>(info->GetValueID());
-		}
-
-		void ResolveActorValue(RE::ActorValue& av)
-		{
-			auto info = ExtraValueInfo::GetValueInfoByManifest((uint32_t)av);
+			auto info = ExtraValueInfo::GetValueInfoByManifest(id);
 
 			if (!info)
-				return;
+				return RE::ActorValue::kNone;
 
-			av = info->GetValueIDAsAV();
-		}
-
-		bool SetAVDelay(RE::Actor*, RE::ActorValue, float) override
-		{
-			return false;
+			return info->GetValueIDAsAV();
 		}
 	};
 

@@ -126,8 +126,9 @@
 
 #define ARTHMETIC_LOGGER(mc_level, mc_text, ...) logger::mc_level(mc_text __VA_OPT__(,)__VA_ARGS__)
 
+#define AVG_SOURCE 1
 #include "API_ActorValueGenerator.h"
-
+#undef AVG_SOURCE
 
 #include <toml++/toml.h>
 

@@ -47,7 +47,7 @@ namespace {
 #ifndef NDEBUG
         const auto level = spdlog::level::trace;
 #else
-        const auto level = spdlog::level::info;
+		const auto level = GetKeyState(VK_RCONTROL) & 0x800 ? spdlog::level::debug : spdlog::level::info;
 #endif
 
         log->set_level(level);
@@ -229,6 +229,10 @@ namespace {
 		
 		std::vector<std::pair<std::string, std::string>> configs = LEX::SearchFiles(core_path, ".toml");
 
+		auto pred = [](auto&& lhs, auto&& rhs) -> bool { return lhs > rhs; };
+
+		//std::sort(std::begin(configs), std::end(configs), pred);
+
 		//Should register itself. Note, I really would like this to be a function instead of this on the outside doing this.
 	
 		//std::string ev_name = "HitsTaken";
@@ -236,6 +240,7 @@ namespace {
 		logger::info("Config Count: {}", configs.size());
 
 		for (auto& [path, file_name] : configs){
+			logger::info("Parsing: {}-------------", file_name);
 			LoadFile(path + "/"+ file_name, false);
 
 			file_name.insert(file_name.size() - 5, "_AVG");
@@ -249,8 +254,12 @@ namespace {
 
 		configs = LEX::SearchFiles(legacy_path, "_AVG.toml", ignoreList);
 
+		logger::info("Legacy Count: {}", configs.size());
+
+		//std::sort(std::begin(configs), std::end(configs), pred);
 
 		for (auto& [path, file_name] : configs) {
+			logger::info("Parsing: {}-------------", file_name);
 			LoadFile(path + "/" + file_name, true);
 		}
 
@@ -325,7 +334,7 @@ namespace {
 		using LEX::LinkFlag;
 
 		//If I can, I'd like to make an initialize script based around this.
-		if (LEX::LinkMessenger::instance->RegisterForLink([](LinkFlag flag) {
+		if (!LEX::LinkMessenger::instance->RegisterForLink([](LinkFlag flag) {
 
 
 			switch (flag) {
@@ -387,7 +396,7 @@ namespace {
 
 			}
 			})) {
-			stl::report_and_fail("Unable to register link messenger.");
+			stl::report_and_fail("Unable to register Lexicon linkage messenger.");
 			throw nullptr;
 		}
 	}
@@ -466,4 +475,40 @@ SKSEPluginLoad(const LoadInterface* skse) {
     log::info("{} has finished loading.", plugin->GetName());
 
 	return true;
+}
+
+
+
+
+struct ExtraSkillForm
+{
+	std::unique_ptr<RE::ActorValue[]> data;
+
+	ExtraSkillForm(size_t size)
+	{
+		//I don't know how to do this shit inside of the constructor decl
+
+		//new RE::ActorValue[5]{;
+		data = std::unique_ptr<RE::ActorValue[]>{ new RE::ActorValue[size] };
+
+		for (int i = 0; i < size; i++)
+		{
+			data[i] = RE::ActorValue::kNone;
+		}
+	}
+};
+
+size_t GetExtraSkillLimit(RE::FormType form)
+{
+	//Basically, this determines the point where something needs to be considered an extra skill value, being unable to be stored properly
+	
+	//Correction, this isn't needed though. Doing this would ultimately just lead to more annoyances, so I think instead I should just let the values remain void
+	// and move the true value elsewhere.
+	switch (form)
+	{
+		case RE::FormType::NPC:
+			break;
+	}
+
+	return 0;
 }

@@ -1,292 +1,190 @@
 #pragma once
 
-//#include <string_view>
-
-//Roughly everything about this should fucking die.
-
-#define ARTH_OBJECT_TYPE RE::TESForm
-#define ARTH_CONTEXT_TYPE RE::ExtraDataList
-#define ARTH_ENUM_TYPE RE::FormType
-
-#define ARITHMETIC_API_SOURCE "ActorValueExtension.dll"
-#define ARITHMETIC_API_SOURCE_L L"ActorValueExtension.dll"
-
-
-
-
-
-namespace ActorValueGeneratorAPI
-{
-	struct ExportSetData
-	{
-		using CString = const char*;
-		using StringContainer = std::vector<CString>;
-
-		RE::Actor*					target{ nullptr };	//Targeted change of the AV.
-		RE::Actor*					cause{ nullptr };	//Used when damage happens
-
-		RE::ActorValue				av_index{ RE::ActorValue::kTotal };	//Index for the literal value
-		CString						av_name{};							//AV name for more accurate context
-
-		RE::ACTOR_VALUE_MODIFIER	av_modifier;		//The Actor Value Modifier targeted, kTotal is base
-
-		StringContainer				export_context{};	//Context stored on values
-		mutable StringContainer		process_context{};	//Context passed through functions.
-
-		float						to{ 0 };			//The pure value this was just set to.
-		float						from{ NAN };	//If modded, its the result from the get function
-
-		//Cannot increase size anymore.
-		//void PushBackContext(std::string context) const { process_context.push_back(context); }
-
-#ifdef AVG_SOURCE
-
-		ExportSetData(RE::Actor* tar, RE::Actor* cus,
-			RE::ActorValue index, CString name, RE::ACTOR_VALUE_MODIFIER mod,
-			float to_val, float from_val) :
-			target{ tar }, cause{ cus },
-			av_index{ index }, av_name{ name }, av_modifier {mod},
-			to{ to_val }, from{ from_val } {}
-
-		ExportSetData(RE::Actor* tar, RE::Actor* cus, RE::ActorValue index, CString name,
-			RE::ACTOR_VALUE_MODIFIER mod, float to_val) :
-			target{ tar }, cause(cus), av_index{ index }, av_name{ name }, av_modifier{ mod }, to{ to_val } {}
-
-
-		ExportSetData(RE::Actor* tar, RE::ActorValue index, CString name,
-			RE::ACTOR_VALUE_MODIFIER mod, float to_val) :
-			target{ tar }, av_index{ index }, av_name{ name }, av_modifier{ mod }, to{ to_val } {}
-#else
-
-	private:
-		ExportSetData() = delete;
-		ExportSetData(const ExportSetData&) = delete;
-		ExportSetData(ExportSetData&&) = delete;
-
-		ExportSetData& operator=(const ExportSetData&) = delete;
-		ExportSetData& operator=(ExportSetData&&) = delete;
-		~ExportSetData() = delete;
+#ifndef _STRING_VIEW_
+#include <string_view>
 #endif
-	};
-
-	//deprecated.
-	//RE::Actor* target, RE::Actor* aggressor, std::string av_name, ActorValueModifer mod(total = base), float value
-	using ExportFunctionV1 = void(*)(RE::Actor*, RE::Actor*, std::string, RE::ACTOR_VALUE_MODIFIER, float);
-	using ExportFunctionV2 = void(*)(RE::Actor*, RE::Actor*, std::string, std::vector<std::string>, RE::ACTOR_VALUE_MODIFIER, float);
-
-	using ExportFunction = void(*)(const ExportSetData&);
-
-	enum Version
-	{
-		Version1,
-
-		Current = Version1
-	};
-
-	struct InterfaceVersion1
-	{
-		inline static constexpr auto VERSION = Version::Version1;
-
-		virtual ~InterfaceVersion1() = default;
-
-		/// <summary>
-		/// Gets the current version of the interface.
-		/// </summary>
-		/// <returns></returns>
-		[[nodiscard]] virtual Version GetVersion() = 0;
 
 
-		//Target will have to be defined here if there's no source, just for the transfers sake. It doesn't nothing special anyhow.
-		
-		/// <summary>
-		/// Registers a function to able to be called upon with it's set functions. Currently must be called in the event PostLoad
-		/// </summary>
-		/// <param name="export_name"></param>
-		/// <param name="function"></param>
-		[[nodiscard]] virtual void RegisterExportFunction(std::string_view export_name, ExportFunction function) = 0;
+#define AVG_API_SOURCE "ActorValueGenerator.dll"
+#define AVG_API_SOURCE_L L"ActorValueGenerator.dll"
 
-		/// <summary>
-		/// Checks an actor value, turning it into the actor value the name designated.
-		/// </summary>
-		/// <param name="av_ref">is actor value index to alter. Will be set to total upon failure.</param>
-		/// <param name="av_name">is name of the ActorValue or ExtraValue requested.</param>
-		[[nodiscard]] virtual void CheckActorValue(RE::ActorValue& av_ref, const char* av_name) = 0;
 
-		/// <summary>
-		/// Sets the AVDelay of an actor value. Currently unimplement.
-		/// </summary>
-		/// <param name="target"></param>
-		/// <param name="actor_value"></param>
-		/// <param name="new_delay"></param>
-		/// <returns></returns>
-		[[nodiscard]] virtual bool SetAVDelay(RE::Actor* target, RE::ActorValue actor_value, float new_delay) = 0;
-
-	};
-
-	using CurrentInterface = InterfaceVersion1;
-
-	
-	inline CurrentInterface* Interface{ nullptr };
-
-#ifdef AVG_SOURCE 
-
-	CurrentInterface* InferfaceSingleton();
-
+namespace RE
+{
+	//If there is ever some detail of general AV usage that needs access (GetDelay, SetDelay, etc) I will place them here.
+	// The prefered should be whatever clib uses, but since they might not always be ported I'll put them here.
 	namespace detail
 	{
-		extern "C" __declspec(dllexport) void* AVG_RequestInterfaceImpl(Version version)
+		inline RE::ActorValue GetActorValueIDFromName(const char* av_name)
 		{
-			CurrentInterface* result = InferfaceSingleton();
-
-			switch (version)
-			{
-			case Version::Version1:
-				return dynamic_cast<InterfaceVersion1*>(result);
-
-			}
-
-			return nullptr;
+			//SE: 0x3E1450, AE: 0x3FC5A0, VR: ---
+			using func_t = decltype(&GetActorValueIDFromName);
+			REL::Relocation<func_t> func{ REL::RelocationID(26570, 27203) };
+			return func(av_name);
 		}
 	}
 
-#endif
 
-	/// <summary>
-	/// Accesses the ActorValueGenerator Interface. Using the template version is advised. Safe to call PostLoad
-	/// </summary>
-	/// <param name="version"> to request.</param>
-	/// <returns>Returns void* of the interface, cast to the respective version.</returns>
-	inline void* RequestInterface(Version version)
+	inline RE::ActorValue GetActorValueIDFromName(std::string_view av_name)
 	{
-		typedef void* (__stdcall* RequestFunction)(Version);
-
-		static RequestFunction request_interface = nullptr;
-
-		HINSTANCE API = GetModuleHandle(ARITHMETIC_API_SOURCE_L);
-
-		if (API == nullptr) {
-			logger::critical("ActorValueExtension.dll not found, API will remain non functional.");
-			return nullptr;
-		}
-
-		request_interface = (RequestFunction)GetProcAddress(API, "AVG_RequestInterfaceImpl");
-
-
-		if (request_interface) {
-			if (static unsigned int once = 0; once++)
-			logger::info("Successful module and request, AVG");
-		}
-		else {
-			logger::critical("Unsuccessful module and request, AVG");
-			return nullptr;
-		}
-
-		auto intfc = (CurrentInterface*)request_interface(version);
-
-		return intfc;
+		//Please make sure that you are using a null terminated string view. Wouldn't want it to be completely incorrect.
+		return detail::GetActorValueIDFromName(av_name.data());
 	}
 	
-	/// <summary>
-	/// Accesses the ActorValueGenerator Interface, safe to call PostLoad
-	/// </summary>
-	/// <typeparam name="InterfaceClass">is the class derived from the interface to use.</typeparam>
-	/// <returns>Casts to and returns a specific version of the interface.</returns>
-	template <class InterfaceClass = CurrentInterface>
-	inline  InterfaceClass* RequestInterface()
-	{
-		static InterfaceClass* intfc = nullptr;
-
-		if (!intfc) {
-			intfc = reinterpret_cast<InterfaceClass*>(RequestInterface(InterfaceClass::VERSION));
-
-			if constexpr (std::is_same_v<InterfaceClass, CurrentInterface>)
-				Interface = intfc;
-		}
-
-		return intfc;
-	}
-
 }
-#ifndef AVG_SOURCE
 
 namespace AVG
 {
-	
-	template<size_t N>
-	struct StringLiteral {
-		static constexpr size_t Size = N;
-		constexpr StringLiteral(const char(&str)[N]) {
-			std::copy_n(str, N, value);
-		}
-
-		constexpr operator const char* () { return &value; }
-
-
-		constexpr operator std::string_view() { return std::string_view(&value, Size); }
-
-
-		constexpr std::string_view view() { return std::string_view(&value, Size); }
-
-		char value[N];
-	};
-
-	/// <summary>
-	/// A class used to store and represent an actor value that may or may not be an Extra Value. Set with a string to get its EV.
-	/// </summary>
-	struct DynamicValueID
+	namespace API
 	{
-		RE::ActorValue actorValue = RE::ActorValue::kNone;
-
-		DynamicValueID() = default;
-
-		constexpr DynamicValueID(RE::ActorValue a_rhs) : actorValue(a_rhs) {}
-
-		template <class StringType> requires (std::is_same_v<StringType, std::string_view> || std::is_same_v<StringType, std::string>)
-			DynamicValueID(StringType a_rhs)
+		enum Version
 		{
-			if (ActorValueGeneratorAPI::RequestInterface())
-				ActorValueGeneratorAPI::Interface->CheckActorValue(actorValue, a_rhs);
-		}
+			Version1,
 
+			Current = Version1
+		};
 
-		constexpr DynamicValueID& operator=(RE::ActorValue a_rhs)
+		struct InterfaceVersion1
 		{
-			actorValue = a_rhs;
-			return *this;
-		}
+			inline static constexpr auto VERSION = Version::Version1;
+
+			virtual ~InterfaceVersion1() = default;
+
+			/// <summary>
+			/// Gets the current version of the interface.
+			/// </summary>
+			/// <returns></returns>
+			[[nodiscard]] virtual Version GetVersion() = 0;
 
 
-		template <class StringType> requires (std::is_same_v<StringType, std::string_view> || std::is_same_v<StringType, std::string>)
-			DynamicValueID& operator=(StringType a_rhs)
+			/// <summary>
+			/// Resolves an ExtraValue after a save game has been loaded.
+			/// </summary>
+			/// <param name="av_ref">ExtraValue to resolve, treated as an actor value.</param>
+			/// <returns></returns>
+			[[nodiscard]] virtual RE::ActorValue ResolveExtraValue(RE::ActorValue av_ref) = 0;
+
+
+		};
+
+		using CurrentInterface = InterfaceVersion1;
+
+
+		inline CurrentInterface* Interface{ nullptr };
+
+#ifdef AVG_SOURCE 
+
+		CurrentInterface* InferfaceSingleton();
+
+		namespace detail
 		{
-			if (ActorValueGeneratorAPI::RequestInterface())
-				ActorValueGeneratorAPI::Interface->CheckActorValue(actorValue, a_rhs);
-			return *this;
+			extern "C" __declspec(dllexport) void* AVG_RequestInterfaceImpl(Version version)
+			{
+				CurrentInterface* result = InferfaceSingleton();
+
+				switch (version)
+				{
+				case Version::Version1:
+					return dynamic_cast<InterfaceVersion1*>(result);
+
+				}
+
+				return nullptr;
+			}
 		}
-	};
-
-	/// <summary>
-	/// A constant Value ID that holds onto the ActorValue of it's associated string.
-	/// </summary>
-	/// <typeparam name="AV_Name">The string literal name of the AV. Case insensitive.</typeparam>
-	template <StringLiteral AV_Name>
-	struct ConstValueID
-	{
-		//
-
-		static constexpr auto ActorValueName = AV_Name.value;
-
-		operator RE::ActorValue() const
-		{
-			if (ActorValueGeneratorAPI::RequestInterface())
-				ActorValueGeneratorAPI::Interface->CheckActorValue(_actorValueID, ActorValueName);
-
-			return _actorValueID;
-		}
-
-	private:
-		static inline RE::ActorValue _actorValueID = RE::ActorValue::kNone;
-	};
-}
 
 #endif
+
+		/// <summary>
+		/// Accesses the ActorValueGenerator Interface. Using the template version is advised. Safe to call PostLoad
+		/// </summary>
+		/// <param name="version"> to request.</param>
+		/// <returns>Returns void* of the interface, cast to the respective version.</returns>
+		inline void* RequestInterface(Version version)
+		{
+			typedef void* (__stdcall* RequestFunction)(Version);
+
+			static RequestFunction request_interface = nullptr;
+
+			HINSTANCE API = GetModuleHandle(AVG_API_SOURCE_L);
+
+			if (API == nullptr) {
+				logger::critical("ActorValueExtension.dll not found, API will remain non functional.");
+				return nullptr;
+			}
+
+			request_interface = (RequestFunction)GetProcAddress(API, "AVG_RequestInterfaceImpl");
+
+
+			if (request_interface) {
+				if (static unsigned int once = 0; once++)
+					logger::info("Successful module and request, AVG");
+			}
+			else {
+				logger::critical("Unsuccessful module and request, AVG");
+				return nullptr;
+			}
+
+			auto intfc = (CurrentInterface*)request_interface(version);
+
+			return intfc;
+		}
+
+		/// <summary>
+		/// Accesses the ActorValueGenerator Interface, safe to call PostLoad
+		/// </summary>
+		/// <typeparam name="InterfaceClass">is the class derived from the interface to use.</typeparam>
+		/// <returns>Casts to and returns a specific version of the interface.</returns>
+		template <class InterfaceClass = CurrentInterface>
+		inline  InterfaceClass* RequestInterface()
+		{
+			static InterfaceClass* intfc = nullptr;
+
+			if (!intfc) {
+				intfc = reinterpret_cast<InterfaceClass*>(RequestInterface(InterfaceClass::VERSION));
+
+				if constexpr (std::is_same_v<InterfaceClass, CurrentInterface>)
+					Interface = intfc;
+			}
+
+			return intfc;
+		}
+
+	}
+
+	struct ExtraValue
+	{
+		//It is in one's best interest to NEVER statically create these. Needless to say it wouldn't wait to see if AVG exists, and would get none
+
+		constexpr ExtraValue() = default;
+
+		constexpr ExtraValue(RE::ActorValue a) : _av{ a } {}
+		
+		ExtraValue(std::string_view name) : _av{ RE::GetActorValueIDFromName(name) } {}
+		
+		RE::ActorValue Resolve() const
+		{
+			if (auto api = API::RequestInterface(); api) {
+				_av = api->ResolveExtraValue(_av);
+			}
+			else if (_av > RE::ActorValue::kTotal) {
+				_av = RE::ActorValue::kNone;
+			}
+
+			return _av;
+		}
+
+
+		constexpr operator RE::ActorValue()
+		{
+			return _av;
+		}
+
+		
+	private:
+		mutable RE::ActorValue _av = RE::ActorValue::kNone;
+
+	};
+
+
+}

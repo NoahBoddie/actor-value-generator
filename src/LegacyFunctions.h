@@ -290,8 +290,16 @@ namespace AVG::Legacy
 	
 	float GetGlobalValueParam(RE::Actor* target, RE::TESForm* param)
 	{
-		RE::TESGlobal* global = param->As<RE::TESGlobal>();
-		return global ? global->value : 0;
+		if (param)
+		{
+			if (RE::TESGlobal* global = param->As<RE::TESGlobal>())
+				return global->value;
+		}
+
+		//LEX::report::runtime::warn("Null global found.");
+		logger::warn("Null global found.");
+
+		return 0;
 	};
 
 	

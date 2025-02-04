@@ -149,6 +149,8 @@ namespace AVG
 	{
 		AliasMode mode = AliasMode::Default;
 
+		//I'm thinking that some aliases can be applied only to skills of some kind.
+
 		ExtraValueInfo* extraValue = nullptr;
 	};
 
@@ -156,19 +158,23 @@ namespace AVG
 	ENUM(MaskType)
 	{
 		kGet,
-		kSet,
+		kDamage,
+		kModifier,
+		kSkill,
+		kAdvance,
 		//kCost, //To be a cost, something only needs to be able to get and set damage.
 		kExclude,
 		kTotal,
+		kLast = MaskType::kTotal - 1,
 	};
 
 
 	inline AliasMask globalMask[MaskType::kTotal];
-
+	constexpr size_t sizef = sizeof(globalMask);
 
 	struct AliasSetting
 	{
-		AliasMask localMask[MaskType::kSet + 1];
+		AliasMask localMask[MaskType::kLast];
 		std::unordered_map<uint8_t, AliasData> nodes;
 
 
@@ -198,23 +204,48 @@ namespace AVG
 			localMask[MaskType::kGet].set(alias, true);
 			globalMask[MaskType::kGet].set(alias, true);
 
-			if (value->AllowsSetting() == true) {
-				localMask[MaskType::kSet].set(alias, true);
-				globalMask[MaskType::kSet].set(alias, true);
+			if (value->AllowsDamage() == true) {
+				localMask[MaskType::kDamage].set(alias, true);
+				globalMask[MaskType::kDamage].set(alias, true);
 			}
+
+			if (value->AllowsModifier() == true) {
+				localMask[MaskType::kModifier].set(alias, true);
+				globalMask[MaskType::kModifier].set(alias, true);
+			}
+
+
+			if (value->AllowsSkill() == true) {
+				localMask[MaskType::kSkill].set(alias, true);
+				globalMask[MaskType::kSkill].set(alias, true);
+			}
+
+			if (value->AllowsAdvance() == true) {
+				localMask[MaskType::kAdvance].set(alias, true);
+				globalMask[MaskType::kAdvance].set(alias, true);
+			}
+
 
 
 			return true;
 		}
 
-		bool IsAliasValidSafe(uint8_t alias, bool requires_set)
+		bool IsAliasValidSafe(uint8_t alias, const MaskType* types, size_t size)
 		{
 			if (!this)
 				return false;
 
-			MaskType type = requires_set ? MaskType::kSet : MaskType::kGet;
+			while (size > 0)
+			{
+				auto type = types[--size];
 
-			return localMask[type].test(alias);
+				if (localMask[type].test(alias) == false){
+					return false;
+				}
+			}
+
+
+			return true;
 		}
 	};
 
@@ -224,15 +255,20 @@ namespace AVG
 
 	ENUM(AliasSet)
 	{
+		_begin = -1,
+
 		//Note for ID related stuff I only need to preserve the ID of stuff I can actually change. Granted, that's a lot.
 		//ExactID,
 		//Prefix,
 		//Suffix,
 		//Contains,
 		//List,
+		
 		Keyword,
 		Plugin,
 		Total,
+
+		Start = AliasSet::_begin + 1,
 	};
 
 	inline std::map<std::string, AliasSetting> aliasMap[AliasSet::Total];
@@ -283,6 +319,8 @@ namespace AVG
 		return false;
 	}
 
+	/*
+	Is this really not used?
 	inline AliasData* GetPluginNode(RE::TESFileArray* source_array, uint8_t value, bool require_set)
 	{
 		if (!source_array)
@@ -343,13 +381,11 @@ namespace AVG
 			return result ? &result->nodes[value] : nullptr;
 		}
 	}
+	//*/
 
 
-
-	inline AliasData* GetDataFromSet(RE::TESForm* form, uint8_t value, MaskType mask, AliasSet set)
+	inline AliasData* GetDataFromSet(RE::TESForm* form, uint8_t value, AliasSet set, const MaskType* masks, size_t a_size)
 	{
-		bool require_set = mask == MaskType::kSet;
-
 		switch (set)
 		{
 		default:
@@ -380,7 +416,7 @@ namespace AVG
 
 				AliasSetting* setting = &(it->second);
 
-				if (setting->IsAliasValidSafe(value, mask == MaskType::kSet) == true)
+				if (setting->IsAliasValidSafe(value, masks, a_size) == true)
 					return &setting->nodes[value];
 			}
 
@@ -403,7 +439,7 @@ namespace AVG
 
 			AliasSetting* result = GetPluginAlias(current);
 
-			if (result->IsAliasValidSafe(value, require_set) == false)
+			if (result->IsAliasValidSafe(value, masks, a_size) == false)
 			{
 				result = nullptr;
 
@@ -419,7 +455,7 @@ namespace AVG
 
 					auto setting = GetPluginAlias(current);
 
-					if (setting->IsAliasValidSafe(value, require_set) == true) {
+					if (setting->IsAliasValidSafe(value, masks, a_size) == true) {
 						result = setting;
 						break;
 					}
@@ -435,7 +471,7 @@ namespace AVG
 
 						auto setting = GetPluginAlias(file);
 
-						if (setting->IsAliasValidSafe(value, require_set) == true) {
+						if (setting->IsAliasValidSafe(value, masks, a_size) == true) {
 							result = setting;
 							break;
 						}
@@ -458,10 +494,12 @@ namespace AVG
 	{
 		None = 0,
 		AllowNone = 1 << 0,
-		RequireSetting = 1 << 1,
+		RequiresDamage = 1 << 1,
+		RequiresModifier = 1 << 2,
+		RequiresSkill = 1 << 3,
+		RequiresAdvance = 1 << 4,
 		//IgnoreKeyword = 1 << 2,
-		IgnorePlugin = 1 << 3,//Ignores plugin aliases, aliases like cost would prevent any spell from properly using the base cost.
-
+		IgnorePlugin = 1 << 5,//Ignores plugin aliases, aliases like cost would prevent any spell from properly using the base cost.
 	};
 
 
@@ -475,25 +513,30 @@ namespace AVG
 		//Allows the value of "none" to be changed, but requires some manual placement rule to avoid over checking. Keyword, exact, and list
 		// all having the least amount of chance for unintended mishaps with it's use.
 		bool allow_none = settings & QuerySettings::AllowNone;
-		bool requires_setting = settings & QuerySettings::RequireSetting;
 
-		MaskType mask = MaskType::kGet;
 
-		if (requires_setting)
-		{
-			mask = MaskType::kSet;
+
+		std::vector<MaskType> masks{ MaskType::kGet };
+
+		if (settings & QuerySettings::RequiresDamage) {
+			masks.push_back(MaskType::kDamage);
 		}
-		/*
-		if (value.IsActorValue() == false)
-		{
-			switch (value.GetVirtualValue().value())
-			{
-			case VirtualValue::kCost:
-				mask = MaskType::kCost;
-				break;
-			}
+
+		if (settings & QuerySettings::RequiresModifier) {
+			masks.push_back(MaskType::kModifier);
 		}
-		//*/
+
+		//if advance, it's also a skill so no reason to mark that too.
+		if (settings & QuerySettings::RequiresAdvance) {
+			masks.push_back(MaskType::kAdvance);
+		}
+		else if (settings & QuerySettings::RequiresSkill) {
+			masks.push_back(MaskType::kSkill);
+		}
+
+
+
+
 
 		RE::TESFileArray* source_array = form->sourceFiles.array;
 
@@ -504,23 +547,29 @@ namespace AVG
 			return false;
 		}
 
-		if (globalMask[mask].test(value) == false) {
-			//logger::debug("Alias for {} not implementing.", (int)alias);
-			return false;
+
+		for (auto mask : masks)
+		{
+			if (globalMask[mask].test(value) == false) {
+				//logger::debug("Alias for {} not implementing.", (int)alias);
+				return false;
+			}
 		}
 
 
 
 		AliasData* data = nullptr;
 
-		for (AliasSet set = AliasSet::Keyword; set != AliasSet::Total && !data; set++)
+		for (AliasSet set = AliasSet::Start; set != AliasSet::Total && !data; set++)
 		{
 			//Later, this needs to take a compiled list of all the exclusions. if I ever get around to doing that.
-			data = GetDataFromSet(form, value, mask, set);
+			data = GetDataFromSet(form, value, set, masks.data(), masks.size());
 		}
 
 		if (!data)
 			return false;
+
+		
 
 		ExtraValueInfo* info = data->extraValue;//->actorValueAliases[alias].extraValue;
 		//ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(plugin_alias->aliasDataMap[spec_type][alias]);//->actorValueAliases[alias].extraValue;
@@ -549,5 +598,16 @@ namespace AVG
 		return AliasToValue(form, out, out, settings);
 	}
 
+	/*
+	static bool AliasToValue(RE::TESForm* form, UnionValue value, SKSE::stl::enumeration<RE::ActorValue>& out, QuerySettings settings = QuerySettings::None)
+	{
+		return AliasToValue(form, out.get(), reinterpret_cast<RE::ActorValue&>(out), settings);
+	}
 
+
+	static bool AliasToValue(RE::TESForm* form, SKSE::stl::enumeration<RE::ActorValue>& out, QuerySettings settings = QuerySettings::None)
+	{
+		return AliasToValue(form, out.get(), reinterpret_cast<RE::ActorValue&>(out), settings);
+	}
+	//*/
 }

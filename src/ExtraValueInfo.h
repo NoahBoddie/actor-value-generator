@@ -14,8 +14,10 @@ namespace AVG
 
 
 	
-	
+#define NOT_ABSTRACT(mc_type) static_assert(!std::is_abstract_v<mc_type>, STRINGIZE(Type mc_type is abstract.));
 
+
+	
 
 	/*
 	
@@ -60,98 +62,54 @@ namespace AVG
 	//While I would say no reason to have this on the player object, that's not really true, so lets get to fixing that. into something else.
 	
 	
+	struct Skill
+	{//This is a structure I'll be using to match RE::ActorValueInfo::Skill later, the structure aims to be the same (but the names proper)
+		float useMult = 1.f;        // 00
+		float useoffset = 0.f;     // 04
+		float improveMult = 1.f;    // 08
+		float improveOffset = 0.f;  // 0C
+	};
+	//TODO: static assert all skill entries please
 	struct SkillInfo
 	{
-		float useMult;        // 00
-		float offsetMult;     // 04
-		float improveMult;    // 08
-		float improveOffset;  // 0C
+		union
+		{
+			struct
+			{
+				float useMult;
+				float useOffset;
+				float improveMult;
+				float improveOffset;
+			};
+			Skill skill{};
+		};
+		
+		float increment = 1;
+		bool grantsXP = true;
+		bool isAdvance = true;
+
+		Skill GetSkill(RE::Actor*)
+		{
+			return skill;
+		}
+
 	};
 
 	struct SkillData
 	{
-		float			level;
-		float			xp;
-		float			levelThreshold;
-		std::uint32_t	legendaryLevels;
+		float			level = 0;				//How many times it's leveled
+		float			xp = 0;					//current experience
+		float			levelThreshold = 1;		//level threshold to level up
+		std::uint32_t	legendaryLevels = 0;
 	};
 	
-	struct SkillData_original
-	{
-		//So this would be the storage stuff,
-		struct PlayerSkills
-		{
-		public:
-			struct Data
-			{
-			public:
-				struct Skills
-				{
-					enum Skill : std::uint32_t
-					{
-						kOneHanded = 0,
-						kTwoHanded = 1,
-						kArchery = 2,
-						kBlock = 3,
-						kSmithing = 4,
-						kHeavyArmor = 5,
-						kLightArmor = 6,
-						kPickpocket = 7,
-						kLockpicking = 8,
-						kSneak = 9,
-						kAlchemy = 10,
-						kSpeech = 11,
-						kAlteration = 12,
-						kConjuration = 13,
-						kDestruction = 14,
-						kIllusion = 15,
-						kRestoration = 16,
-						kEnchanting = 17,
-						kTotal
-					};
-				};
-				using Skill = Skills::Skill;
-
-				struct SkillData
-				{
-				public:
-					// members
-					float level;           // 0
-					float xp;              // 4
-					float levelThreshold;  // 8
-				};
-				static_assert(sizeof(SkillData) == 0xC);
-
-				// members
-				float         xp;                              // 000
-				float         levelThreshold;                  // 004
-				SkillData     skills[Skill::kTotal];           // 008
-				std::uint32_t legendaryLevels[Skill::kTotal];  // 0E0
-			};
-			static_assert(sizeof(Data) == 0x128);
-
-			void AdvanceLevel(bool a_addThreshold);
-
-			// members
-			Data* data;  // 0
-		};
-		//and this would be the EVI stuff
-		struct Base  // AVSK
-		{
-			
-		};
-
-		//float experience;
-        //float levelUpAt;
-	};
-
 	using ValueFormula = LEX::Formula<float(RE::Actor::*)()>;
 	using SetFormula = LEX::Formula<void(RE::Actor::*)(RE::Actor*, float, float)>;
 
 
 	//This is functionally default data. Update data isn't something I'll want to implement for a while, and since this doesn't serialize I'm comfortable
 	// doing it later.
-    struct DefaultData
+    struct DefaultInfo
     {
 		enum Type
 		{
@@ -171,7 +129,7 @@ namespace AVG
 
 
 
-    struct RecoveryData
+    struct RecoverInfo
     {
 		enum Flags : uint8_t
 		{
@@ -202,33 +160,17 @@ namespace AVG
 		float _pool{ NAN };
 	};
 
-
-    //RELOCATE
-	constexpr uint32_t sign_bit = 0x80000000;
-    
-    /*
-    //These aren't gonna be used, I forgot to account for functional so rip.
-    DataID ValueToData(ValueID value)
+	struct InputFlags
 	{
-        //always reinterpret cast this in here, if the thing is unsigned I need to make something that will convert it
-        //sign_bit is invalid, none is used for actor value so you know.
-		if (value <= static_cast<DataID>(RE::ActorValue::kTotal) || value == sign_bit)
-			return ExtraValueInfo::FunctionalID;
+		constexpr static InputFlags All() noexcept
+		{
+			return InputFlags{ ExtraValueInput::All, ExtraValueInput::All };
+		}
 
-        int extra = value > sign_bit ? 2 : 1;
+		ExtraValueInput set{};
+		ExtraValueInput get{};
+	};
 
-        return value - (static_cast<DataID>(RE::ActorValue::kTotal) + extra);
-	}
-
-    ValueID DataToValue(DataID data)
-	{
-		ValueID raw_value = data + static_cast<ValueID>(RE::ActorValue::kTotal);
-
-        int extra = raw_value == sign_bit ? 2 : 1;
-
-        return raw_value + extra;
-	}
-    //*/
 
 
 	enum class InfoFlags
@@ -341,7 +283,8 @@ namespace AVG
 		static inline DataID _endTypeIndex[ExtraValueType::Total];
 
 
-        static inline DataID _nextDataID = 0;
+		static inline DataID _nextDataID = 0;
+		static inline DataID _nextDataOffset = 0;
         static inline ValueID _nextValueID = static_cast<ValueID>(RE::ActorValue::kTotal) + 1;
 
 		//This only serializes 1 and 2 from the original
@@ -370,6 +313,7 @@ namespace AVG
 
 		//A list of indices that can recover. Their new vector is made on the spot, instead of manually.
 		static inline std::vector<DataID> _recoverValueList{};
+		static inline std::vector<DataID> _skillValueList{};
 
 		//This is a way to interface with already existing actor values in a way that is compliant with the current system.
 		// Such as giving recovery data to existing actor values. Though, it would seem this would be something these would 
@@ -401,7 +345,7 @@ namespace AVG
 		{
 			constexpr uint32_t remove = static_cast<uint32_t>(RE::ActorValue::kTotal) + 1;
 
-			if (i < remove)
+			if (i < remove || i == (uint32_t)RE::ActorValue::kNone)
 				return nullptr;
 
 			i -= remove;
@@ -412,6 +356,11 @@ namespace AVG
 			return _extraValueList[i];
 		}
 
+		static ExtraValueInfo* GetValueInfoByAV(RE::ActorValue av)
+		{
+			return GetValueInfoByValue(static_cast<uint32_t>(av));
+		}
+
 		
 		static ExtraValueInfo* GetValueInfoByData(DataID i)
 		{
@@ -419,6 +368,8 @@ namespace AVG
 			// and this would end up happening for exclusive.
 			if (_endTypeIndex[ExtraValueType::Exclusive] <= i)
 				return nullptr;
+
+			//Instead do a manual check of the type, for delegates.
 
 			return _extraValueList[i];
 		}
@@ -449,11 +400,22 @@ namespace AVG
 		}
 
 
-		static std::map<DataID, SkillData> GetSkillfulValues(RE::PlayerCharacter* player)
+		static std::vector<std::pair<DataID, SkillData>> GetSkillfulValues(RE::PlayerCharacter* player)
 		{
 			//This is HELLA temporary. But here's a thought, why not just create the vector I want right here,
 			// then have it be copiable from ToggleCollection?
-			return {};
+
+			//Instead of the skill value list, I believe I'd much rather prefer skills be grouped by having functional skills (delegates) be sooner, 
+			// and skillful adaptive ones be later, allowing them to be bunched and iterated on.
+			// To help with this, I might have a map of vectors that get iterated on and collapsed together.
+
+			std::vector<std::pair<DataID, SkillData>> result(_skillValueList.size());
+
+			auto it = _skillValueList.begin();
+
+			std::transform(result.begin(), result.end(), result.begin(), [&](auto pair) { auto i = it++; return std::make_pair(*i, SkillData()); });
+
+			return result;
 		}
 
 
@@ -480,6 +442,12 @@ namespace AVG
 			//Log no valid type was given.
 
 			return 0;
+		}
+
+		static inline uint32_t GetCountAV()
+		{
+			//Make this an API function
+			return std::to_underlying(RE::ActorValue::kTotal) + GetCount(ExtraValueType::Total);
 		}
 
 		//Rename to get EndIndex
@@ -534,12 +502,12 @@ namespace AVG
 		{
 			//note for later, force finalization if the number of avs become too large.
 
-			if (_nextDataID == FunctionalID) {
+			if (_finish) {
 				logger::trace("Already finished manifest.");
 				return;
 			}
-			
-			_nextDataID = FunctionalID;
+			//Used to compare to functional id. Not gonna do that no more.
+			//_nextDataID = FunctionalID;
 
 			_finish = true;
 
@@ -583,11 +551,16 @@ namespace AVG
 			}
 		}
 
+		static bool Finished()
+		{
+			return _finish;
+		}
 
     //Membered
 	protected:
 		//const char* valueName = nullptr;
 		std::string valueName{};
+		std::string displayName{};
 		
 		ValueID _valueIDOffset = static_cast<ValueID>(RE::ActorValue::kTotal);  //IE, invalid.
 
@@ -606,70 +579,57 @@ namespace AVG
 		virtual DataID		GetDataID() = 0;
 		ValueID				GetValueID() { return int(RE::ActorValue::kTotal) + 1 + GetBeginIndex(GetType()) + _valueIDOffset; }
 		ValueID				GetOffset() { return _valueIDOffset; }
+		RE::ActorValue		GetAliasID() const { return _aliasID; }
 		//I'd really like to convert these to clean old string_views that share
 		std::string_view	GetName() { return valueName; }
 		const char*			GetCName() { return valueName.c_str(); }
+		std::string_view	GetDisplayName() { return displayName.empty() ? GetName() : displayName; }
+
+
 		RE::BSFixedString	GetFixedName() { return RE::BSFixedString(valueName.c_str()); }
 		RE::ActorValue		GetValueIDAsAV() { return static_cast<RE::ActorValue>(GetValueID()); }
 
-		virtual void LoadFromFile(const FileNode& node, bool legacy) = 0;
+		virtual void LoadFromFile(const FileNode& node, bool legacy);
 
-		virtual bool AllowsSetting() { return false; }
+		virtual InputFlags GetInputFlags() = 0;
 
-		virtual bool IsAdaptive() { return false; }
-		virtual bool IsFunctional() { return false; }
-		virtual bool IsExclusive() { return false; }
+		bool AllowsModifier() { return GetInputFlags().set & (ExtraValueInput::Temporary | ExtraValueInput::Permanent); }
+		bool AllowsDamage() { return GetInputFlags().set & ExtraValueInput::Damage; }
+		bool AllowsSkill() { return IsSkill(); }//Seperate from is skill, needs no skill data to be one.
+		bool AllowsAdvance() { return IsSkill(); }//Is advance solely needs to check for skill info. Namely, it also needs to be able to grow.
+
+		virtual bool IsSkill() { return !this ? false : GetSkillInfo(); }
+		
+
+
+
+		bool IsAdaptive() { return  GetType() == ExtraValueType::Adaptive; }
+		bool IsFunctional() { return GetType() == ExtraValueType::Functional; }
+		bool IsExclusive() { return GetType() == ExtraValueType::Exclusive; }
+
 
 		//I would like this to actually be a const variable instead.
-		virtual ExtraValueType GetType() { return ExtraValueType::Total; }
+		virtual ExtraValueType GetType() const = 0;
 
-		virtual SkillData* GetSkillData() { return nullptr; }
-		virtual DefaultData* GetDefaultData() { return nullptr; }
-		virtual RecoveryData* GetRecoveryData() { return nullptr; }
+		virtual SkillInfo* GetSkillInfo() { return nullptr; }
+		virtual DefaultInfo* GetDefaultInfo() { return nullptr; }
+		virtual RecoverInfo* GetRecoverInfo() { return nullptr; }
 
-		virtual SkillData* MakeSkillData() { return nullptr; }
-		virtual DefaultData* MakeDefaultData() { return nullptr; }
-		virtual RecoveryData* MakeRecoveryData() { return nullptr; }
-
-
-		SkillData* GetSkillDataSafe()
+		SkillInfo* FetchSkillInfo()
 		{
 			if (!this)
 				return nullptr;
 
-			return GetSkillData();
+			return GetSkillInfo();
 		}
-		DefaultData* GetDefaultDataSafe()
+		DefaultInfo* FetchDefaultInfo()
 		{
 			if (!this)
 				return nullptr;
 
-			return GetDefaultData();
+			return GetDefaultInfo();
 		}
-		RecoveryData* GetRecoveryDataSafe() { if (!this) return nullptr; return GetRecoveryData(); }
-
-		SkillData* MakeSkillDataSafe() 
-		{ 
-			if (!this)
-				return nullptr;
-
-			return MakeSkillData(); 
-		}
-		DefaultData* MakeDefaultDataSafe()
-		{
-			if (!this)
-				return nullptr;
-
-			return MakeDefaultData();
-		}
-		RecoveryData* MakeRecoveryDataSafe()
-		{
-			if (!this)
-				return nullptr;
-
-			return MakeRecoveryData();
-		}
-
+		RecoverInfo* FetchRecoverInfo() { if (!this) return nullptr; return GetRecoverInfo(); }
 
 
     protected:
@@ -677,7 +637,11 @@ namespace AVG
 		static inline void AddExtraValueInfo(ExtraValueInfo* info, ExtraValueType type)
 		{
 			//Data ID and value id are the same, I just remembered stack overflow is a thing, no need to ignore -1
-			bool recovery_value = info->GetRecoveryData() != nullptr;
+			bool recovery_value = info->GetRecoverInfo() != nullptr;
+			auto skill_value = info->GetSkillInfo();
+			
+
+			DataID id;
 			switch (type)
 			{
 			case ExtraValueType::Adaptive:
@@ -685,12 +649,24 @@ namespace AVG
 				if (recovery_value) {
 					_exclusiveRecoverIndex = _recoverValueList.size() + 1;
 				}
+				id = _nextDataID++;
+				goto set_data;
+
 			case ExtraValueType::Exclusive:
+				id = _nextDataOffset++;
+				set_data:
+
 				if (recovery_value) {
-					_recoverValueList.push_back(_nextDataID);
+					_recoverValueList.push_back(id);
 				}
 
-				info->SetDataID(_nextDataID++);
+
+				if (skill_value && skill_value->isAdvance) {
+					_skillValueList.push_back(id);
+				}
+
+
+				info->SetDataID(id);
 				break;
 			}
 
@@ -764,157 +740,254 @@ namespace AVG
 	using ExtraValueType = ExtraValueInfo::ExtraValueType;
 
 
+	struct SkillfulData
+	{
+		SkillInfo* GetSkillInfo() { return _skill; }
 
 
-
-    class AdaptiveValueInfo : public ExtraValueInfo
-    {
-		SkillData* _skill{};//The skill data isn't stored here, just the information for it.
-		DefaultData* _default{};
-		RecoveryData* _recovery{};
-
-        DataID _dataID{};
-
-		void SetDataID(DataID id) override { _dataID = id; }
-    public:
-		DataID GetDataID() override { return _dataID; }
-		bool IsAdaptive() override { return true; }
-		ExtraValueType GetType() override { return ExtraValueType::Adaptive; }//these will be exclusive, I'm gonna use a flag for that.
-		virtual bool AllowsSetting() { return true; }
-
-
-		SkillData* GetSkillData() override { return _skill; }
-		DefaultData* GetDefaultData() override { return _default; }
-		RecoveryData* GetRecoveryData() override { return _recovery; }
-
-		float GetExtraValueDefault(RE::Actor* target) override { auto def = GetDefaultData(); return !def ? 0 : def->defaultFunction(target); }
-
-		SkillData* MakeSkillData() override
+		SkillInfo* FetchSkillInfo()
 		{
-			if (!_skill)
-				_skill = new SkillData();
+			if (!this)
+				return nullptr;
 
-			return _skill;
+			return GetSkillInfo();
 		}
 
-		DefaultData* MakeDefaultData() override
+		SkillInfo& ObtainSkillInfo()
+		{
+			if (!_skill)
+				_skill = new SkillInfo();
+
+			return *_skill;
+		}
+
+
+		void LoadFromFile(const FileNode& node, bool is_legacy);
+
+
+
+		SkillInfo* _skill{};//The skill data isn't stored here, just the information for it.
+
+
+	};
+
+	struct AdaptiveData : public SkillfulData
+	{
+
+		float GetExtraValue(ExtraValueInfo* info, RE::Actor* target, ExtraValueInput value_types = ExtraValueInput::All) ;
+
+		bool SetExtraValue(ExtraValueInfo* info, RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) ;
+
+		bool ModExtraValue(ExtraValueInfo* info, RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier) ;
+
+		void LoadFromFile(const FileNode& node, bool is_legacy);
+
+
+
+		float GetExtraValueDefault(RE::Actor* target) 
+		{ 
+			if (GetSkillInfo() != nullptr)
+			{
+				static RE::Setting* iAVDSkillStart = RE::GameSettingCollection::GetSingleton()->GetSetting("iAVDSkillStart");
+				return iAVDSkillStart->GetSInt();
+			}
+			
+			auto def = GetDefaultInfo(); 
+			return !def ? 0 : def->defaultFunction(target); 
+		}
+
+		
+		DefaultInfo* GetDefaultInfo() { return _default; }
+		RecoverInfo* GetRecoverInfo() { return _recovery; }
+
+		DefaultInfo* ObtainDefaultInfo()
 		{
 			if (!_default)
-				_default = new DefaultData();
+				_default = new DefaultInfo();
 
 			return _default;
 		}
-		RecoveryData* MakeRecoveryData() override
+		RecoverInfo* ObtainRecoverInfo()
 		{
 			if (!_recovery)
-				_recovery = new RecoveryData();
+				_recovery = new RecoverInfo();
 
 			return _recovery;
 		}
 
 
-        float GetExtraValue(RE::Actor* target, ExtraValueInput value_types = ExtraValueInput::All) override;
 
-        bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) override;
+		DefaultInfo* FetchDefaultInfo()
+		{
+			if (!this)
+				return nullptr;
 
-		bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier) override;
+			return GetDefaultInfo();
+		}
+		RecoverInfo* FetchRecoverInfo() { if (!this) return nullptr; return GetRecoverInfo(); }
+
+
+
+
+		inline AdaptiveData* adapt() noexcept
+		{
+			return this;
+		}
+
+
+
+		
+		DefaultInfo* _default{};
+		RecoverInfo* _recovery{};
+
+		DataID _dataID = -1;
+
+
+
+
+
+
+	};
+
+
+
+    class AdaptiveValueInfo : public ExtraValueInfo, public AdaptiveData
+    {
+		void SetDataID(DataID id) override { _dataID = id; }
+    public:
+		DataID GetDataID() override { return  _dataID; }
+		
+		ExtraValueType GetType() const override { return ExtraValueType::Adaptive; }//these will be exclusive, I'm gonna use a flag for that.
+		
+
+
+		InputFlags GetInputFlags() override { return InputFlags::All(); }
+
+
+
+		SkillInfo* GetSkillInfo() override { return adapt()->GetSkillInfo(); }
+		DefaultInfo* GetDefaultInfo() override { return adapt()->GetDefaultInfo(); }
+		RecoverInfo* GetRecoverInfo() override { return adapt()->GetRecoverInfo(); }
+
+		float GetExtraValueDefault(RE::Actor* target) override { return adapt()->GetExtraValueDefault(target); }
+
+
+		float GetExtraValue(RE::Actor* target, ExtraValueInput value_types = ExtraValueInput::All) override
+		{
+			return adapt()->GetExtraValue(this, target, value_types);
+		}
+
+		bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
+		{
+			return adapt()->SetExtraValue(this, target, value, modifier);
+		}
+
+		bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
+		{
+			return adapt()->ModExtraValue(this, target, aggressor, value, modifier);
+		}
 
         void Update()
         {
             //The function attempts to update
         }
 
-        void AdaptiveValueInfo_(std::string& name)// : ExtraValueInfo{ name }
-		{
-			//I would like this to have the job if appointing this to a list. It also copies the string given.
-            AddExtraValueInfo(this, ExtraValueType::Adaptive);
-			//logger::info("{}", _dataID);
-		}
-		
-		//Note, this is a temp solution.
-        void AdaptiveValueInfo_(std::string& name, std::string& delay, std::string& rate)// : ExtraValueInfo{ name }
-		{
-			//I would like this to have the job if appointing this to a list. It also copies the string given.
-
-			_recovery = new RecoveryData();
-			//_recovery->tmp_recDelay = delay;
-			//_recovery->tmp_recRate = rate;
-			_recovery->recoveryDelay = ValueFormula::Create(delay);//, "ActorValueGenerator::Commons");
-			_recovery->recoveryRate = ValueFormula::Create(delay);
-
-			//This should be done EXTERNALLY, that way it's easier to make exclusive.
-			AddExtraValueInfo(this, ExtraValueType::Adaptive);
-
-			//logger::info("{}", _dataID);
-		}
 
 		void LoadFromFile(const FileNode& node, bool legacy) override;
 
     };
+	NOT_ABSTRACT(AdaptiveValueInfo);
+
 
 	template <class Type>
 	using ModifierArray = std::array<Type, ActorValueModifier::kTotal + 1>;
 
-	using ExportSetData = ActorValueGeneratorAPI::ExportSetData;
-	using ExportFunction = ActorValueGeneratorAPI::ExportFunction;
 
-
-	inline void DamageHealth(RE::Actor* target, RE::Actor* aggressor, std::string original_av, std::vector<std::string>, RE::ACTOR_VALUE_MODIFIER modifier, float value)
+	struct FunctionalData
 	{
-		if (target)
+
+		float GetExtraValue(RE::Actor* target, ExtraValueInput value_types = ExtraValueInput::All)
 		{
-			target->AsActorValueOwner()->RestoreActorValue(modifier, RE::ActorValue::kHealth, value);
-		}
-	}
+			//Needs to use _get, this also needs to wait for implementation
+
+			if (value_types == ExtraValueInput::None)
+				return 0;
+
+			if (!(_getFlags & value_types))
+				return 0;
 
 
-	//New one of these, maybe, send papyrus event?
-	inline void AffectActorValue(const ExportSetData& data)
-	{
-		size_t ex_size = data.export_context.size();
+			float bas = _get[ActorValueModifier::kTotal] && !!(value_types & ExtraValueInput::Base) ?
+				_get[ActorValueModifier::kTotal](target) : 0;
 
-		logger::debug("??? {} {} {}", !data.target, ex_size , isnan(data.from));
+			float prm = _get[ActorValueModifier::kPermanent] && !!(value_types & ExtraValueInput::Permanent) ?
+				_get[ActorValueModifier::kPermanent](target) : 0;
 
-		if (!ex_size || isnan(data.from) || !data.target)
-			return;
-		logger::debug("CONTEXT {}", data.export_context[0]);
+			float tmp = _get[ActorValueModifier::kTemporary] && !!(value_types & ExtraValueInput::Temporary) ?
+				_get[ActorValueModifier::kTemporary](target) : 0;
 
+			float dmg = _get[ActorValueModifier::kDamage] && !!(value_types & ExtraValueInput::Damage) ?
+				_get[ActorValueModifier::kDamage](target) : 0;
 
-		ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByName(data.export_context[0]);
+			dmg = fmin(dmg, 0);
 
-		RE::ActorValue av = info ? info->GetValueIDAsAV() : Utility::StringToActorValue(data.export_context[0]);;
+			//logger::info("{}/{}/{}/{}", bas, prm, tmp, dmg);
 
-		if (av == RE::ActorValue::kTotal)
-			return;
-
-		logger::debug("AV {}", (int)av);
-
-
-		float mod_value = data.to - data.from;
-
-		float mult_value = 1.f;
-
-		if (ex_size > 1) {
-			try{
-				mult_value = std::stof(data.export_context[1]);
-			}
-			catch (const std::exception&){}
+			return bas + prm + tmp + dmg;
 		}
 
+		bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier)
+		{
+			if (!_set[modifier])
+				return false;
 
+			//float from = GetExtraValue(target, ModifierToValueInput(modifier));
+			float from = modifier == RE::ActorValueModifier::kTotal ? NAN : 0;
+			_set[modifier](target, nullptr, from, value);
 
-		if (data.av_modifier == ActorValueModifier::kTotal){
-			float base = data.target->AsActorValueOwner()->GetBaseActorValue(av);
-			data.target->AsActorValueOwner()->SetBaseActorValue(av, (mod_value * mult_value) + base);
+			return true;
 		}
-		else{
-			data.target->AsActorValueOwner()->RestoreActorValue(data.av_modifier, av, mult_value * mod_value);
+
+		bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier)
+		{
+
+			if (!_set[modifier])
+				return false;
+
+			float current = GetExtraValue(target, ModifierToValueInput(modifier));
+
+			_set[modifier](target, aggressor, current, value + current);
+
+			return true;
 		}
 
-	}
 
 
-    class FunctionalValueInfo : public ExtraValueInfo
+		ExtraValueInput GetFlags() const { return _getFlags; }
+		ExtraValueInput SetFlags() const { return _setFlags; }
+
+
+		//I want this to load specifically the below
+		void LoadFromFile(const FileNode& node, bool legacy);
+
+
+
+
+		ExtraValueInput _getFlags = ExtraValueInput::None;
+		ExtraValueInput _setFlags = ExtraValueInput::None;
+
+		ModifierArray<ValueFormula>	_get{};
+		ModifierArray<SetFormula>	_set{};
+
+
+
+		FunctionalData* function()
+		{
+			return this;
+		}
+	};
+
+    class FunctionalValueInfo : public ExtraValueInfo, public FunctionalData
 	{
         
 		
@@ -926,12 +999,6 @@ namespace AVG
         // In total, it looks like this
         //void(RE::Actor*, std::string, RE::ActorValueModifier, float);
 
-		//Easy way to tell which ones this actually has.
-		ExtraValueInput _getFlags = ExtraValueInput::None;
-		ExtraValueInput _setFlags = ExtraValueInput::None;
-
-		ModifierArray<ValueFormula>	_get{};
-		ModifierArray<SetFormula>	_set{};
 
 		void HandleSetExport(RE::ACTOR_VALUE_MODIFIER modifier, RE::Actor* target, RE::Actor* cause, float from, float to)
 		{//Rename this
@@ -941,61 +1008,34 @@ namespace AVG
 
     public:
         DataID GetDataID() override { return FunctionalID; }
-		bool IsFunctional() { return true; }
-		ExtraValueType GetType() override { return ExtraValueType::Functional; }
 
 
-		ExtraValueInput GetFlags() const { return _getFlags; }
-		ExtraValueInput SetFlags() const { return _setFlags; }
+		ExtraValueType GetType() const override { return ExtraValueType::Functional; }
 
 		//This isn't quite right though//Needs more than just damage.
-		virtual bool AllowsSetting() override { return SetFlags(); }
+
+		InputFlags GetInputFlags() override { return InputFlags{ GetFlags(), SetFlags() }; }
+
 
         float GetExtraValue(RE::Actor* target, ExtraValueInput value_types = ExtraValueInput::All) override
 		{
-			//Needs to use _get, this also needs to wait for implementation
-
-			if (value_types == ExtraValueInput::None)
-				return 0;
-
-			if (!(_getFlags & value_types))
-				return 0;
-			
-
-			float bas = _get[ActorValueModifier::kTotal] && !!(value_types & ExtraValueInput::Base) ? 
-				_get[ActorValueModifier::kTotal](target) : 0;
-			
-			float prm = _get[ActorValueModifier::kPermanent] && !!(value_types & ExtraValueInput::Permanent) ?
-				_get[ActorValueModifier::kPermanent](target) : 0;
-
-			float tmp = _get[ActorValueModifier::kTemporary] && !!(value_types & ExtraValueInput::Temporary) ?
-				_get[ActorValueModifier::kTemporary](target) : 0;
-			
-			float dmg = _get[ActorValueModifier::kDamage] && !!(value_types & ExtraValueInput::Damage) ?
-				_get[ActorValueModifier::kDamage](target) : 0;
-
-			dmg = fmin(dmg, 0);
-
-			//logger::info("{}/{}/{}/{}", bas, prm, tmp, dmg);
-
-			return bas + prm + tmp + dmg;
+			return function()->GetExtraValue(target, value_types);
 		}
 
 		bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
 		{
-			if (!_set[modifier])
-				return false;
-
-			float from = GetExtraValue(target, ModifierToValueInput(modifier));
-
-			_set[modifier](target, nullptr, from, value);
-
-            return true;
+			return function()->SetExtraValue(target, value, modifier);
         }
 
-		bool AddSetFunction(std::string func, ActorValueModifier mod, std::vector<std::string> context)
+		bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
 		{
-			
+			return function()->ModExtraValue(target, aggressor, value, modifier);
+		}
+
+
+		bool AddSetFunction__(std::string func, ActorValueModifier mod, std::vector<std::string> context)
+		{
+
 
 
 			_set[mod] = SetFormula::Create("cause", "from", "to", func);
@@ -1008,18 +1048,65 @@ namespace AVG
 			return true;
 		}
 
+
+		void Included() override
+		{
+			//logger::info("Functional value {} created. Get: {:04B}, Set: {:04B}", GetName(), (int)_getFlags, (int)_setFlags);
+		}
+
+		void LoadFromFile(const FileNode& node, bool legacy) override;
+	};
+	NOT_ABSTRACT(FunctionalValueInfo);
+	
+
+	class ExclusiveValueInfo : public ExtraValueInfo, public FunctionalData, public AdaptiveData
+	{
+		void SetDataID(DataID id) override { _dataID = id; }
+
+	public:
+		DataID GetDataID() override { return GetCount(ExtraValueType::Adaptive) + _dataID; }
+
+		ExtraValueType GetType() const override { return ExtraValueType::Exclusive; }
+
+		//This isn't quite right though//Needs more than just damage.
+		
+		InputFlags GetInputFlags() override { return InputFlags{ GetFlags(), SetFlags() }; }
+
+
+
+		float GetExtraValue(RE::Actor* target, ExtraValueInput value_types = ExtraValueInput::All) override
+		{
+			if (target && target->IsPlayerRef() == true)
+				return adapt()->GetExtraValue(this, target, value_types);
+			else
+				return function()->GetExtraValue(target, value_types);
+		}
+
+		bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
+		{
+			if (target && target->IsPlayerRef() == true)
+				return adapt()->SetExtraValue(this, target, value, modifier);
+			else
+				return function()->SetExtraValue(target, value, modifier);
+		}
+
 		virtual bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
 		{
-
-			if (!_set[modifier])
-				return false;
-
-			float from = GetExtraValue(target, ModifierToValueInput(modifier));
-
-			_set[modifier](target, aggressor, from, value);
-
-            return true;
+			if (target && target->IsPlayerRef() == true)
+				return adapt()->ModExtraValue(this, target, aggressor, value, modifier);
+			else
+				return function()->ModExtraValue(target, aggressor, value, modifier);
 		}
+
+
+
+		SkillInfo* GetSkillInfo() override { return adapt()->GetSkillInfo(); }
+		DefaultInfo* GetDefaultInfo() override { return adapt()->GetDefaultInfo(); }
+		RecoverInfo* GetRecoverInfo() override { return adapt()->GetRecoverInfo(); }
+
+		float GetExtraValueDefault(RE::Actor* target) override { return target->IsPlayerRef() ? adapt()->GetExtraValueDefault(target) : 0.0f; }
+
+
 
 		void Included() override
 		{
@@ -1045,7 +1132,7 @@ namespace AVG
 			}
 
 			for (ActorValueModifier mod = ActorValueModifier::kPermanent; mod <= ActorValueModifier::kTotal; mod++)
-			{				
+			{
 				//For there to be a set there, there must be a coresponding get function
 				if (!(ModifierToValueInput(mod) & _getFlags)) {
 					logger::info("corresponding get function must exist for set function.");
@@ -1059,8 +1146,8 @@ namespace AVG
 				_set[mod] = SetFormula::Create("cause", "from", "to", set_strings[mod]);
 
 				_setFlags |= ModifierToValueInput(mod);
-			
-			
+
+
 			}
 
 
@@ -1074,8 +1161,7 @@ namespace AVG
 
 		void LoadFromFile(const FileNode& node, bool legacy) override;
 	};
-
-	
+	NOT_ABSTRACT(FunctionalValueInfo);
 
     //The Psuedo namespace is erased when the time has come.
 	namespace Psuedo
