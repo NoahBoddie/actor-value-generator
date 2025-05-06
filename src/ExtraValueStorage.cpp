@@ -55,6 +55,18 @@ namespace AVG
 	}
 
 
+	
+	//using Mutex = std::shared_mutex;
+	//using ReadLock = std::shared_lock<Mutex>;
+	//using WriteLock = std::unique_lock<Mutex>;
+
+	using Mutex = std::mutex;
+	using ReadLock = std::lock_guard<Mutex>;
+	using WriteLock = std::lock_guard<Mutex>;
+	
+
+	inline static std::mutex accessLock{};
+
 	ExtraValueStorage* ExtraValueStorage::GetStorage(RE::Actor* actor)
 	{
 		//This won't be used often, but it's used in situations where it would be ok to not create storage yet.
@@ -64,6 +76,9 @@ namespace AVG
 		
 		if (actor->IsPlayerRef() == true)
 			return PlayerStorage::GetAsPlayable(false);
+
+		ReadLock guard{ accessLock };
+		
 
 		auto result = _valueTable->find(actor->formID);
 
@@ -83,6 +98,7 @@ namespace AVG
 		if (actor->IsPlayerRef() == true)
 			return *PlayerStorage::GetAsPlayable(true);
 
+		WriteLock guard{ accessLock };
 
 		ExtraValueStorage*& storage_spot = (*_valueTable)[actor->formID];
 
@@ -91,6 +107,7 @@ namespace AVG
 			return *storage_spot;
 		}
 
+		//guard.unlock();
 
 		ExtraValueStorage* new_storage = new ExtraValueStorage(actor, false);
 

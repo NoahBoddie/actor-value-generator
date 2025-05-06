@@ -221,9 +221,17 @@ namespace AVG
 				logger::debug("Reverting extra value storage");
 				RemoveAllStorages();
 			}
+
+			void operator()(std::unordered_map<SerialFormID, ExtraValueStorage*>&)
+			{
+				
+				logger::debug("Reverting extra value storage");
+				RemoveAllStorages();
+			}
 		};
 
 		using EVStorageMap = SerializableMap<SerialFormID, ExtraValueStorage*, SerializeClass, SerializeClass>;
+		//using EVStorageMap = SerializableUnorderedMap<SerialFormID, ExtraValueStorage*, SerializeClass, SerializeClass>;
 
 
 	//static
@@ -1617,3 +1625,6 @@ namespace AVG
 	//*/
 #endif
 }
+
+
+

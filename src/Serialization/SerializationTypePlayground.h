@@ -919,3 +919,12 @@ namespace RGL
 #define CreatePrimarySerializer(mc_reference, mc_record_type) INITIALIZE(mc_reference, HandlePrimarySerializer, mc_record_type);
 
 }
+
+template <>
+struct std::hash<RGL::SerialFormID>
+{
+	std::size_t operator()(const RGL::SerialFormID& form_id) const
+	{
+		return form_id;
+	}
+};

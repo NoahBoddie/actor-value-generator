@@ -377,7 +377,7 @@ namespace AVG
     public:
 
 
-		static ExtraValueInfo* GetValueInfoByName(std::string name)
+		static ExtraValueInfo* GetValueInfoByName(const std::string_view& name)
 		{
 			auto result = std::find_if(_extraValueList->begin(), _extraValueList->end(), [=](auto it) { return Utility::StrCmpI(it->valueName, name); });
 

@@ -167,7 +167,7 @@ namespace AVG
 		static float thunk(RE::ActorValueOwner* a_this, RE::ActorValue av)
 		{
 			//logger::info("AVGA hook");
-
+			
 			RE::Character* target = skyrim_cast<RE::Character*>(a_this);
 
 			uint32_t raw_value = std::bit_cast<uint32_t>(av);
@@ -200,6 +200,47 @@ namespace AVG
 		static inline REL::Relocation<decltype(thunk<0>)> func[2];
 		//static inline REL::Relocation<decltype(thunk)> func_;
 	};
+
+
+	//VTABLE
+	struct GetActorValueMaximumHook
+	{
+		static void Patch()
+		{
+			//*
+			REL::Relocation<uintptr_t> PlayerCharacter__Actor_VTable{ RE::VTABLE_PlayerCharacter[5] };
+			REL::Relocation<uintptr_t> Character__Actor_VTable{ RE::VTABLE_Character[5] };
+
+			func[0] = PlayerCharacter__Actor_VTable.write_vfunc(0x02, thunk<0>);
+			func[1] = Character__Actor_VTable.write_vfunc(0x02, thunk<1>);
+
+			logger::info("GetActorValueMaximumHook complete...");
+		}
+		template <int I>
+		static float thunk(RE::ActorValueOwner* a_this, RE::ActorValue av)
+		{
+			RE::Character* target = skyrim_cast<RE::Character*>(a_this);
+
+			uint32_t raw_value = std::bit_cast<uint32_t>(av);
+
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(raw_value);
+
+
+			if (info) {
+				return info->GetExtraValue(target, ExtraValueInput::Base | ExtraValueInput::Permanent);
+			}
+			else {
+				return func[I](a_this, av);
+			}
+		}
+
+
+
+		static inline REL::Relocation<decltype(thunk<0>)> func[2];
+		//static inline REL::Relocation<decltype(thunk)> func_;
+	};
+
+
 
 	//VTABLE
 	struct SetActorValueHook
@@ -563,7 +604,7 @@ namespace AVG
 			//*/
 		}
 
-		static RE::ActorValue thunk(char* av_name)
+		static RE::ActorValue thunk(const char* av_name)
 		{
 			//logger::debug("AVID hook");
 			//Would like strcmp with case insensitivity
@@ -613,8 +654,8 @@ namespace AVG
 		static void thunk(std::conditional_t<I == 0, RE::Character*, RE::PlayerCharacter*> a_this, float a2)
 		{
 			func[I](a_this, a2);
+		
 			
-
 			if (a2 == 0)
 				a2 = Utility::GetDeltaTime();
 
@@ -692,7 +733,7 @@ namespace AVG
 		}
 
 
-		static int32_t thunk( RE::Character* a_this, RE::ActorValue a2, float a3)
+		static int32_t thunk(RE::Character* a_this, RE::ActorValue a2, float a3)
 		{
 			//I think I'll want to do this if it's a dynamic form. Because that means it's relinquishing it's current form.
 
@@ -708,13 +749,60 @@ namespace AVG
 			//But for now, this.
 			ExtraValueStorage* value_storage = ExtraValueStorage::GetStorage(a_this);
 
-			if (!value_storage) {
-				goto retn;
+			if (value_storage) {
+				value_storage->Update(a_this, a3);
+
 			}
 
-			value_storage->Update(a_this, a3);
-			
-		retn:
+//#define THE_STUPID_SHIT
+#ifdef THE_STUPID_SHIT
+#define THE_TEST_NAME    RE::ActorValue((int)RE::ActorValue::kTotal + 1)
+//#define THE_TEST_NAME GetActorValueIDFromNameHook::thunk("Swords")
+
+			//*
+			float currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			currenttimescale = a_this->AsActorValueOwner()->GetActorValue(THE_TEST_NAME) / 100.0f;
+			//*/
+
+			//*
+			auto v = &ExtraValueStorage::GetCreateStorage(a_this);
+			v = &ExtraValueStorage::GetCreateStorage(a_this);
+			v = &ExtraValueStorage::GetCreateStorage(a_this);
+			v = &ExtraValueStorage::GetCreateStorage(a_this);
+			v = &ExtraValueStorage::GetCreateStorage(a_this);
+			v = &ExtraValueStorage::GetCreateStorage(a_this);
+
+			if (v) {
+
+				float t = v->GetValue(a_this, 0, ExtraValueInput::All);
+				t = v->GetValue(a_this, 0, ExtraValueInput::All);
+				t = v->GetValue(a_this, 0, ExtraValueInput::All);
+				t = v->GetValue(a_this, 0, ExtraValueInput::All);
+				t = v->GetValue(a_this, 0, ExtraValueInput::All);
+				t = v->GetValue(a_this, 0, ExtraValueInput::All);
+				t = v->GetValue(a_this, 0, ExtraValueInput::All);
+			}
+			else
+			{
+				logger::info("test");
+			}
+			//*/
+			//logger::info("Doing {} current {:X}", a_this->GetName(), std::hash<std::thread::id>{}(std::this_thread::get_id()));
+			logger::info("Doing {} current", a_this->GetName());
+#endif
+
+		
 			return func(a_this, a2, a3);
 		}
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -1217,6 +1305,7 @@ namespace AVG
 			RecalculateLeveledActorHook::Patch();
 
 			GetActorValueHook::Patch();
+			GetActorValueMaximumHook::Patch();
 			SetActorValueHook::Patch();
 			ModActorValueHook::Patch();
 			GetBaseActorValueHook::Patch();

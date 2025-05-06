@@ -60,6 +60,59 @@ namespace RGL
 	};
 
 
+	template<class PairA, class PairB, class PairSerializeClass = DefaultSerialize, class RevertClass = void>
+	class SerializableUnorderedMap : public SerialIterator<std::unordered_map<PairA, PairB>, std::pair<const PairA, PairB>, PairSerializeClass, RevertClass>
+	{
+	protected:
+		//using Pair = std::pair<const PairA, PairB>;
+		using Pair = std::pair<const PairA, PairB>;
+
+
+	public:
+
+		void EmplaceEntry(Pair& entry) override
+		{
+			this->_iteratable.emplace(entry);
+		}
+
+		//*
+		void HandleEntry(Pair& entry, SerialArgument& serializer, bool& success) override
+		{
+			//This is less required.
+			if constexpr (std::is_same_v<PairSerializeClass, DefaultSerialize>)
+			{
+				serializer.Serialize(entry.first);
+				serializer.Serialize(entry.second);
+			}
+		}
+		//*/
+
+		PairB& operator[](const PairA& key)
+		{
+			auto& _map = this->get();
+			return _map[key];
+		}
+		//#ifdef ddddddddddddddddd
+		template<class LikeA>
+		PairB& operator[](const LikeA& key)
+		{
+			//Check for invalid conversions.
+			auto& _map = this->get();
+
+			//static_assert(std::is_same_v<LikeA, SerialFormID>, "llll");
+			//return _map[static_cast<const PairA&>(*&key)];
+			//Try this if you can convert this.
+			//PairA pair_test = key;
+			PairA pair_test(key);
+			//Desperate.
+			return _map[pair_test];
+		}
+		//#endif
+	};
+
+
+
+
 	//Removes the need for serialFormID (it's hard to use in maps).
 	//template<DerivedSerialWrapper<RE::FormID> WrappedFormID>
 	inline void SerializeFormHandle(RE::FormID& form_id, SerialArgument& argument, bool& success)
