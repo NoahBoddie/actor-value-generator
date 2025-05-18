@@ -59,9 +59,9 @@ namespace RGL
 //#endif
 	};
 
-
+	/*
 	template<class PairA, class PairB, class PairSerializeClass = DefaultSerialize, class RevertClass = void>
-	class SerializableUnorderedMap : public SerialIterator<std::unordered_map<PairA, PairB>, std::pair<const PairA, PairB>, PairSerializeClass, RevertClass>
+	class SerializableMap : public SerialIterator<std::map<PairA, PairB>, std::pair<const PairA, PairB>, PairSerializeClass, RevertClass>
 	{
 	protected:
 		//using Pair = std::pair<const PairA, PairB>;
@@ -75,17 +75,7 @@ namespace RGL
 			this->_iteratable.emplace(entry);
 		}
 
-		//*
-		void HandleEntry(Pair& entry, SerialArgument& serializer, bool& success) override
-		{
-			//This is less required.
-			if constexpr (std::is_same_v<PairSerializeClass, DefaultSerialize>)
-			{
-				serializer.Serialize(entry.first);
-				serializer.Serialize(entry.second);
-			}
-		}
-		//*/
+	
 
 		PairB& operator[](const PairA& key)
 		{
@@ -109,9 +99,7 @@ namespace RGL
 		}
 		//#endif
 	};
-
-
-
+	//*/
 
 	//Removes the need for serialFormID (it's hard to use in maps).
 	//template<DerivedSerialWrapper<RE::FormID> WrappedFormID>

@@ -56,16 +56,6 @@ namespace AVG
 
 
 	
-	//using Mutex = std::shared_mutex;
-	//using ReadLock = std::shared_lock<Mutex>;
-	//using WriteLock = std::unique_lock<Mutex>;
-
-	using Mutex = std::mutex;
-	using ReadLock = std::lock_guard<Mutex>;
-	using WriteLock = std::lock_guard<Mutex>;
-	
-
-	inline static std::mutex accessLock{};
 
 	ExtraValueStorage* ExtraValueStorage::GetStorage(RE::Actor* actor)
 	{
@@ -119,6 +109,8 @@ namespace AVG
 
 	bool ExtraValueStorage::RemoveStorage(RE::FormID _id)
 	{
+		WriteLock guard{ accessLock };
+
 		if (!_id || _valueTable->contains(_id) == false)
 			return false;
 
@@ -132,8 +124,7 @@ namespace AVG
 		//needs an initializer part
 		//It will need to search the left hand, the right hand
 		logger::info("[Unregister {:08X} ]", _id);
-
-
+		
 		ExtraValueStorage* storage = _valueTable[_id];
 
 		//LOCK while removing
