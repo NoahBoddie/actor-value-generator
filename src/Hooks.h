@@ -860,6 +860,35 @@ namespace AVG
 		return func(a_this, a2, a3, a4, a5, a6, a7);
 	}
 
+	float GetXPFromSkillRank(float skill)
+	{
+		static RE::Setting* fXPPerSkillRank = RE::GameSettingCollection::GetSingleton()->GetSetting("fXPPerSkillRank");
+
+		//I'mma be real, I'm not trying to sort this shit out one bit.
+
+		float v1;
+		float v3;
+		float v4;
+		float v5;
+		float v6;
+
+		v1 = skill + 1.0;
+		v3 = (((skill + 1.0) + 1.0) * (skill + 1.0)) * 0.5;
+		v4 = v3;
+
+		if ((v3 - v4) < 0.0)
+		{
+			v4 = v4 - 1.0;
+		}
+		v5 = (v1 * skill) * 0.5;
+		v6 = v5;
+		if ((v5 - v6) < 0.0)
+		{
+			v6 = v6 - 1.0;
+		}
+		return (v4 - v6) * fXPPerSkillRank->GetFloat();
+	}
+
 
 	//Prologue
 	struct AdvanceSkillHook
@@ -998,10 +1027,7 @@ namespace AVG
 
 					if (skill_info->grantsXP)
 					{
-						//6E7430
-						REL::Relocation<float(float)> ExperienceFormula{ REL::RelocationID(40576, 000).address() };
-
-						float exp = ExperienceFormula(prev);
+						float exp = GetXPFromSkillRank(prev);
 
 						a_this->data->xp += exp;
 					}
@@ -1047,8 +1073,8 @@ namespace AVG
 					std::sprintf(buffer, sSkillIncreased->GetString(), name.data(), (int)base);
 					//auto print = std::vformat(sSkillIncreased->GetString(), std::make_format_args(name, base));
 					
-					//880160
-					REL::Relocation<void(int32_t, const char*, RE::TESQuest*, uint64_t)> SendEventIGuess{ REL::RelocationID(50751, 000).address() };
+					//SE: 880160, AE: 8C25B0
+					REL::Relocation<void(int32_t, const char*, RE::TESQuest*, uint64_t)> SendEventIGuess{ REL::RelocationID(50751, 51646).address() };
 					
 					//SendEventIGuess(20, print.c_str(), nullptr, 0);
 					SendEventIGuess(20, buffer, nullptr, 0);
@@ -1544,8 +1570,6 @@ namespace AVG
 			REL::Relocation<uintptr_t> Character__Actor_VTable{ RE::VTABLE_Character[0] };
 			REL::Relocation<uintptr_t> PlayerCharacter__Actor_VTable{ RE::VTABLE_PlayerCharacter[0] };
 
-			//Don't think this is right
-			uintptr_t index = REL::RelocationID{ 0x118, 0x11A }.id();
 
 			func[0] = Character__Actor_VTable.write_vfunc(0x118, thunk<0>);
 			func[1] = PlayerCharacter__Actor_VTable.write_vfunc(0x118, thunk<1>);

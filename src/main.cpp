@@ -344,6 +344,8 @@ namespace {
 				//ArithmeticAPI::RequestInterface();
 				//ActorValueGeneratorAPI::RequestInterface();
 				{
+
+					logger::info("Starting...");
 					LEX::IProject* avg = nullptr;
 
 					if (LEX::ProjectManager::instance->CreateProject("ActorValueGenerator", nullptr, avg) != LEX::APIResult::Success)
@@ -358,6 +360,8 @@ namespace {
 							logger::info("ETU* Legacy has failured to create");
 						}
 					}
+
+					logger::info("Ending?... {} {}", !!avg, !!legacy);
 				}
 				break;
 
