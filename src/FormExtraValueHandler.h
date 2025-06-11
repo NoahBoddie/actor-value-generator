@@ -161,8 +161,11 @@ namespace AVG
 					successes += AliasToValue(form, effect_data.secondaryAV, setting);
 					[[fallthrough]];
 				//Forgot accumulating.
+				case Archetype::kAbsorb:
 				case Archetype::kValueModifier:
+				case Archetype::kValueAndParts:
 				case Archetype::kPeakValueModifier:
+				case Archetype::kAccumulateMagnitude:
 					successes += AliasToValue(form, effect_data.primaryAV, setting);
 					[[fallthrough]];
 				default:

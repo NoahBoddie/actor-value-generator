@@ -154,9 +154,9 @@ namespace RGL
 
 	template <typename T>
 	constexpr std::string_view type_name() {
-		constexpr auto wrapped_name = detail::wrapped_type_name<T>();
-		constexpr auto prefix_length = detail::wrapped_type_name_prefix_length();
-		constexpr auto suffix_length = detail::wrapped_type_name_suffix_length();
+		constexpr auto wrapped_name = RGL::detail::wrapped_type_name<T>();
+		constexpr auto prefix_length = RGL::detail::wrapped_type_name_prefix_length();
+		constexpr auto suffix_length = RGL::detail::wrapped_type_name_suffix_length();
 		constexpr auto type_name_length = wrapped_name.length() - prefix_length - suffix_length;
 		return wrapped_name.substr(prefix_length, type_name_length);
 	}

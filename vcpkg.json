@@ -32,7 +32,7 @@
             "boost-algorithm",
             "boost-regex",
             "magic-enum",
-            "boost-regex",
+            "boost-multiprecision",
             "simpleini"
           ]
         },

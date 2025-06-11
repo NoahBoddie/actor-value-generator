@@ -356,7 +356,10 @@ namespace {
 					commons = avg->GetCommons();
 
 					if (avg) {
-						if (LEX::ProjectManager::instance->CreateScript(avg, "__Legacy__", "", "", legacy, std::vector<std::string_view>{"incremental"}) != LEX::APIResult::Success) {
+						//IProject* project, std::string_view name, std::string_view path, std::string_view content, IScript*& out, std::span<std::string_view> options = {}
+						//if (LEX::ProjectManager::instance->CreateScript(avg, "__Legacy__", "", "", &legacy, std::vector<std::string_view>{"incremental"}) != LEX::APIResult::Success) {
+						std::vector<std::string_view>incremental{ "incremental" };
+						if (LEX::ProjectManager::instance->CreateScript(avg, "__Legacy__", "", "", legacy, incremental) != LEX::APIResult::Success) {
 							logger::info("ETU* Legacy has failured to create");
 						}
 					}

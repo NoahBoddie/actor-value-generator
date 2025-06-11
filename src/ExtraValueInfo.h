@@ -793,7 +793,7 @@ namespace AVG
 			}
 			
 			auto def = GetDefaultInfo(); 
-			return !def ? 0 : def->defaultFunction(target); 
+			return !def ? 0 : def->defaultFunction(target)->Call();
 		}
 
 		
@@ -918,16 +918,16 @@ namespace AVG
 
 
 			float bas = _get[ActorValueModifier::kTotal] && !!(value_types & ExtraValueInput::Base) ?
-				_get[ActorValueModifier::kTotal](target) : 0;
+				_get[ActorValueModifier::kTotal](target)->Call() : 0;
 
 			float prm = _get[ActorValueModifier::kPermanent] && !!(value_types & ExtraValueInput::Permanent) ?
-				_get[ActorValueModifier::kPermanent](target) : 0;
+				_get[ActorValueModifier::kPermanent](target)->Call() : 0;
 
 			float tmp = _get[ActorValueModifier::kTemporary] && !!(value_types & ExtraValueInput::Temporary) ?
-				_get[ActorValueModifier::kTemporary](target) : 0;
+				_get[ActorValueModifier::kTemporary](target)->Call() : 0;
 
 			float dmg = _get[ActorValueModifier::kDamage] && !!(value_types & ExtraValueInput::Damage) ?
-				_get[ActorValueModifier::kDamage](target) : 0;
+				_get[ActorValueModifier::kDamage](target)->Call() : 0;
 
 			dmg = fmin(dmg, 0);
 
@@ -943,7 +943,7 @@ namespace AVG
 
 			//float from = GetExtraValue(target, ModifierToValueInput(modifier));
 			float from = modifier == RE::ActorValueModifier::kTotal ? NAN : 0;
-			_set[modifier](target, nullptr, from, value);
+			_set[modifier](target)->Call(nullptr, from, value);
 
 			return true;
 		}
@@ -956,7 +956,7 @@ namespace AVG
 
 			float current = GetExtraValue(target, ModifierToValueInput(modifier));
 
-			_set[modifier](target, aggressor, current, value + current);
+			_set[modifier](target)->Call(aggressor, current, value + current);
 
 			return true;
 		}
@@ -1002,7 +1002,7 @@ namespace AVG
 
 		void HandleSetExport(RE::ACTOR_VALUE_MODIFIER modifier, RE::Actor* target, RE::Actor* cause, float from, float to)
 		{//Rename this
-			_set[modifier](target, cause, from, to);
+			_set[modifier](target)->Call(cause, from, to);
 		}
 
 

@@ -96,8 +96,8 @@ namespace RGL
 	using all_true = std::is_same<bool_pack<bs..., true>, bool_pack<true, bs...>>;
 
 
-	template<bool... bs>
-	using any_true = std::is_same<bool_pack<bs..., true>, bool_pack<true, set_type_v<bool, bs, false>...>>;
+	//template<bool... bs>
+	//using any_true = std::is_same<bool_pack<bs..., true>, bool_pack<true, set_type_v<bool, bs, false>...>>;
 
 
 	//creates the default value of literally anything if applicable
