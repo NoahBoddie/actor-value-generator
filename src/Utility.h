@@ -666,7 +666,7 @@ namespace RGL
 	{
 		const type_info& info = typeid(void);
 
-		const Type() = default;
+		Type() = default;
 
 		constexpr Type(const type_info& i) : info(i) {}
 		

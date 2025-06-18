@@ -177,13 +177,13 @@ namespace AVG
 	class ExtraValueStorage : public SerializationHandler
 	{
 	private:
-		//using Mutex = std::shared_mutex;
-		//using ReadLock = std::shared_lock<Mutex>;
-		//using WriteLock = std::unique_lock<Mutex>;
+		using Mutex = std::shared_mutex;
+		using ReadLock = std::shared_lock<Mutex>;
+		using WriteLock = std::unique_lock<Mutex>;
 
-		using Mutex = std::mutex;
-		using ReadLock = std::lock_guard<Mutex>;
-		using WriteLock = std::lock_guard<Mutex>;
+		//using Mutex = std::mutex;
+		//using ReadLock = std::lock_guard<Mutex>;
+		//using WriteLock = std::lock_guard<Mutex>;
 
 
 		inline static Mutex accessLock{};

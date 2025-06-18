@@ -754,7 +754,7 @@ namespace AVG
 
 			}
 
-#define THE_STUPID_SHIT
+//#define THE_STUPID_SHIT
 #ifdef THE_STUPID_SHIT
 #define THE_TEST_NAME    RE::ActorValue((int)RE::ActorValue::kTotal + 1)
 //#define THE_TEST_NAME GetActorValueIDFromNameHook::thunk("Swords")

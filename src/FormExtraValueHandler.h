@@ -141,8 +141,11 @@ namespace AVG
 					effect_data.secondaryAV = ValueAliasHandler::AliasToValue(effect_data.secondaryAV, form, successes, AliasQuerySettings::RequireSetting);
 					[[fallthrough]];
 				//Forgot accumulating.
+				case Archetype::kAbsorb:
+				case Archetype::kValueAndParts:
 				case Archetype::kValueModifier:
 				case Archetype::kPeakValueModifier:
+				case Archetype::kAccumulateMagnitude:
 					effect_data.primaryAV = ValueAliasHandler::AliasToValue(effect_data.primaryAV, form, successes, AliasQuerySettings::RequireSetting);
 					[[fallthrough]];
 				default:
