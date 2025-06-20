@@ -1606,7 +1606,7 @@ namespace AVG
 
 	struct SkillCheckPatch
 	{
-		enum Register
+		enum Register1
 		{
 			eax = 0xF8,
 			ebp = 0xFD,
@@ -1614,19 +1614,39 @@ namespace AVG
 			esi = 0xFE,
 		};
 
+		enum Register2
+		{
+			r8d = 0xF8,
+			r10d = 0xFA,
+		};
 
-		static std::array<uint8_t, 3> GetInstruction(Register reg = eax)
+		static std::array<uint8_t, 3> GetInstruction(Register1 reg = eax)
 		{
 			return std::array<uint8_t, 3>{ 0x83, (uint8_t)reg, 0xFA };
 		}
 
-		static bool HandlePatch(uintptr_t address, Register reg = eax)
+		static bool HandlePatch(uintptr_t address, Register1 reg = eax)
 		{
+			//83 XX 11
 			if (REL::make_pattern<"83 F8 11">().match(address) == true) {
 				//cmp reg, -8
 				std::array<uint8_t, 3> instruction{ 0x83, (uint8_t)reg, 0xF8 };
 
 				REL::safe_write(address, &instruction, 3);
+
+				return true;
+			}
+			return false;
+
+		}
+		static bool HandlePatch(uintptr_t address, Register2 reg)
+		{
+			//41 83 XX 11
+			if (REL::make_pattern<"41 83 FA 11">().match(address) == true) {
+				//cmp reg, -8
+				std::array<uint8_t, 4> instruction{ 0x41, 0x83, (uint8_t)reg, 0xF8 };
+
+				REL::safe_write(address, &instruction, 4);
 
 				return true;
 			}
@@ -1664,12 +1684,21 @@ namespace AVG
 			//SE: 0x86D830, AE: 0x8AE270, VR:???
 			REL::Relocation<std::uintptr_t>CraftEnch__Disenchant{ REL::RelocationID{ 50459, 51363 }, 0xA4 };
 
+			//SE: 0x9721C0, AE: 9AD6D0, VR: ???
+			REL::Relocation<std::uintptr_t>PYRS_AdvanceSkill{ REL::RelocationID{ 54817, 55449 }, 0x28 };
+
+			//SE: 0x979990, AE: 9B46A0, VR: ???
+			REL::Relocation<std::uintptr_t>PYRS_IncrementSkill{ REL::RelocationID{ 55002, 55616 }, 0x2E };
+
+
 			/*
 			86E2C0+78 //CraftItem_Create, seems to be create generic, improve weapon, and improve armor all at once.
 			86E490+FC//CraftSmith_Create seems to specifically be for smithing. Neat.
 			874350+1AF//Needs investigation, seems to be something related to construction though. Shouldn't jump the gun, it's not an advance.
 			9721C0+28//PYRS_AdvanceSkill. Needs to use r8d, which is slightly bigger, so please make adjustments. 41 83 F8  11 seems to be the arrangement.
 			979990+2E//PYRS_IncrementSkill   cmp     r10d, 11h
+			
+			
 			//Check other objects pls
 
 			14037FAD0+125//AE, this is the check for NPCS, it spans 6 values long.
@@ -1690,6 +1719,8 @@ namespace AVG
 			REL::Relocation<std::uintptr_t>TESBook__ReadSkill_2{ TESBook__ReadSkill, REL::VariantOffset{0x14F, 0x186, 0x14F } };
 
 
+			HandlePatch(PYRS_AdvanceSkill.address(), r8d);
+			HandlePatch(PYRS_IncrementSkill.address(), r10d);
 			HandlePatch(ActiveEffect__GetCost.address());
 			HandlePatch(SpellItem__AdjustCost.address());
 			HandlePatch(Explosion__Damage.address());

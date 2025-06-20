@@ -114,53 +114,6 @@ namespace RGL
 	};
 
 
-	template <typename T> constexpr std::string_view type_name();
-
-	template <>
-	constexpr std::string_view type_name<void>()
-	{
-		return "void";
-	}
-
-	namespace detail {
-
-		using type_name_prober = void;
-
-		template <typename T>
-		constexpr std::string_view wrapped_type_name()
-		{
-#ifdef __clang__
-			return __PRETTY_FUNCTION__;
-#elif defined(__GNUC__)
-			return __PRETTY_FUNCTION__;
-#elif defined(_MSC_VER)
-			return __FUNCSIG__;
-#else
-			#error "Unsupported compiler"
-#endif
-		}
-
-		constexpr std::size_t wrapped_type_name_prefix_length() {
-			return wrapped_type_name<type_name_prober>().find(type_name<type_name_prober>());
-		}
-
-		constexpr std::size_t wrapped_type_name_suffix_length() {
-			return wrapped_type_name<type_name_prober>().length()
-				- wrapped_type_name_prefix_length()
-				- type_name<type_name_prober>().length();
-		}
-
-	} // namespace detail
-
-	template <typename T>
-	constexpr std::string_view type_name() {
-		constexpr auto wrapped_name = RGL::detail::wrapped_type_name<T>();
-		constexpr auto prefix_length = RGL::detail::wrapped_type_name_prefix_length();
-		constexpr auto suffix_length = RGL::detail::wrapped_type_name_suffix_length();
-		constexpr auto type_name_length = wrapped_name.length() - prefix_length - suffix_length;
-		return wrapped_name.substr(prefix_length, type_name_length);
-	}
-	
 
 	struct DefaultSerialize;
 	
@@ -283,17 +236,6 @@ namespace RGL
 		{ is_pointer<T> };
 	};
 	//*/
-	template <typename T>
-	concept pointer_type = std::is_pointer_v<T> ||
-		(requires(T pointer) {
-			{ pointer.operator->() } -> std::same_as<typename std::remove_reference_t<T>::pointer > ;
-	}
-	&& (requires(T pointer) {
-		{ pointer.operator*() } -> std::same_as<typename std::add_lvalue_reference<typename std::remove_reference_t<T>::element_type>::type>;
-	})
-	);
-
-	static_assert(pointer_type<std::unique_ptr<int>&>, "TEST");
 
 	//Main take aways.
 	// Bit messy (obvs)
