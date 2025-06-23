@@ -100,7 +100,15 @@ add_library("${PROJECT_NAME}::${PROJECT_NAME}" ALIAS "${PROJECT_NAME}")
 
 
 #THis attempt has not worked.
-add_subdirectory("C:/Users/Noah/Desktop/Modding/[Lab]/{Lab Tools}/lexicon-skse" LexiconSKSE)
+
+
+
+if (NOT LexiconSKSEPath)
+	cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH CMAKE_REPO_DIR)
+	set(LexiconSKSEPath "${CMAKE_REPO_DIR}/lexicon-skse")
+endif()
+
+add_subdirectory(${LexiconSKSEPath} LexiconSKSE)
 add_dependencies(LexiconSKSE LexiconSKSE::LexiconSKSE)
 
 #message("**${PROJECT_SOURCE_DIR}")
