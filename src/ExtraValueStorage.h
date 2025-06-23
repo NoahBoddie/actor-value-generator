@@ -177,12 +177,28 @@ namespace AVG
 
 	class ExtraValueStorage : public SerializationHandler
 	{
+	private:
+		using Mutex = std::shared_mutex;
+		using ReadLock = std::shared_lock<Mutex>;
+		using WriteLock = std::unique_lock<Mutex>;
+
+		//using Mutex = std::mutex;
+		//using ReadLock = std::lock_guard<Mutex>;
+		//using WriteLock = std::lock_guard<Mutex>;
+
+
+		inline static Mutex accessLock{};
+
+
+
 	public:
 		
 		struct SerializeClass
 		{
 			void operator()(std::pair<const SerialFormID, ExtraValueStorage*>& entry, SerialArgument& serializer, bool& success)
 			{
+				WriteLock guard{ accessLock };
+
 				success = serializer.Serialize(entry.first);//Needs to be a particular type of object, serializable formID
 
 
@@ -229,7 +245,10 @@ namespace AVG
 
 	//static
 	private:
-		
+	
+
+
+
 		//May make these unique, and only give out regular pointers.
 		//inline static EVStorageMap& _valueTable = Initializer<EVStorageMap, PrimaryRecordType>(HandlePrimarySerializer, PrimaryRecordType::ExtraValueStorage);
 		inline static EVStorageMap& _valueTable = SerializationHandler::CreatePrimarySerializer<EVStorageMap>(PrimaryRecordType::ExtraValueStorage);
@@ -258,6 +277,8 @@ namespace AVG
 
 		static void RemoveAllStorages()
 		{
+			WriteLock guard{ accessLock };
+
 			for (auto& store_pair : *_valueTable)
 			{
 				delete store_pair.second;

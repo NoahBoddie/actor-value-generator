@@ -24,6 +24,7 @@ namespace AVG
 			return test;
 		}
 			
+		ReadLock guard{ accessLock };
 
 		auto result = _valueTable->find(actor->formID);
 
@@ -44,6 +45,8 @@ namespace AVG
 			auto test = PlayerStorage::GetAsPlayable(true);
 			return *test;
 		}
+
+		WriteLock guard{ accessLock };
 		
 		ExtraValueStorage*& storage_spot = (*_valueTable)[actor->formID];
 
@@ -63,6 +66,8 @@ namespace AVG
 
 	bool ExtraValueStorage::RemoveStorage(RE::FormID _id)
 	{
+		WriteLock guard{ accessLock };
+
 		if (!_id || _valueTable->contains(_id) == false)
 			return false;
 
