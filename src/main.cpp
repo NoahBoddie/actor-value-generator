@@ -17,6 +17,8 @@
 
 #include "LegacyFunctions.h"
 
+//#include "Tome.hpp"
+
 using namespace RE::BSScript;
 using namespace AVG;
 using namespace SKSE;
@@ -225,7 +227,7 @@ namespace {
 		constexpr std::string_view core_path = "Data/SKSE/Lexicon/Resources/ActorValueGenerator";
 
 
-
+		logger::info("searching for configs at  '{}'", core_path);
 		
 		std::vector<std::pair<std::string, std::string>> configs = LEX::SearchFiles(core_path, ".toml");
 
@@ -251,6 +253,8 @@ namespace {
 
 		//std::vector<std::string, std::string> configs = LEX::SearchFiles(core_path, "_AVG", ".toml");
 		constexpr std::string_view legacy_path = "Data/SKSE/Plugins/ActorValueData";
+
+		logger::info("searching for configs at  '{}'", legacy_path);
 
 		configs = LEX::SearchFiles(legacy_path, "_AVG.toml", ignoreList);
 

@@ -5,6 +5,7 @@
 
 namespace AVG::API
 {
+
 	struct ActorValueGeneratorInterface : public CurrentInterface
 	{
 		Version GetVersion() override { return Version::Current; }
@@ -12,10 +13,10 @@ namespace AVG::API
 
 		RE::ActorValue ResolveExtraValue(RE::ActorValue av) override
 		{
-			if (av <= RE::ActorValue::kTotal || av ==  RE::ActorValue::kNone)
+			if (av <= RE::ActorValue::kTotal || av == RE::ActorValue::kNone)
 				return av;
 
-			uint32_t id  = (uint32_t)av - (uint32_t)RE::ActorValue::kTotal;
+			uint32_t id = (uint32_t)av - (uint32_t)RE::ActorValue::kTotal;
 
 			auto info = ExtraValueInfo::GetValueInfoByManifest(id);
 
@@ -26,9 +27,26 @@ namespace AVG::API
 		}
 	};
 
+
+
 	[[nodiscard]] CurrentInterface* InferfaceSingleton()
 	{
 		static ActorValueGeneratorInterface intfc{};
 		return &intfc;
 	}
+
+	extern "C" __declspec(dllexport) void* AVG_RequestInterfaceImpl(Version version)
+	{
+		CurrentInterface* result = InferfaceSingleton();
+
+		switch (version)
+		{
+		case Version::Version1:
+			return dynamic_cast<InterfaceVersion1*>(result);
+
+		}
+
+		return nullptr;
+	}
+
 }

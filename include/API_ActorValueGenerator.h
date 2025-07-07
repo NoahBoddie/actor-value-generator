@@ -1,10 +1,5 @@
 #pragma once
 
-#ifndef _STRING_VIEW_
-#include <string_view>
-#endif
-
-
 #define AVG_API_SOURCE "ActorValueGenerator.dll"
 #define AVG_API_SOURCE_L L"ActorValueGenerator.dll"
 
@@ -70,30 +65,7 @@ namespace AVG
 		using CurrentInterface = InterfaceVersion1;
 
 
-		inline CurrentInterface* Interface{ nullptr };
 
-#ifdef AVG_SOURCE 
-
-		CurrentInterface* InferfaceSingleton();
-
-		namespace detail
-		{
-			extern "C" __declspec(dllexport) void* AVG_RequestInterfaceImpl(Version version)
-			{
-				CurrentInterface* result = InferfaceSingleton();
-
-				switch (version)
-				{
-				case Version::Version1:
-					return dynamic_cast<InterfaceVersion1*>(result);
-
-				}
-
-				return nullptr;
-			}
-		}
-
-#endif
 
 		/// <summary>
 		/// Accesses the ActorValueGenerator Interface. Using the template version is advised. Safe to call PostLoad
@@ -109,7 +81,7 @@ namespace AVG
 			HINSTANCE API = GetModuleHandle(AVG_API_SOURCE_L);
 
 			if (API == nullptr) {
-				logger::critical("ActorValueExtension.dll not found, API will remain non functional.");
+				spdlog::critical("ActorValueGenerator.dll not found, API will remain non functional.");
 				return nullptr;
 			}
 
@@ -118,10 +90,10 @@ namespace AVG
 
 			if (request_interface) {
 				if (static unsigned int once = 0; once++)
-					logger::info("Successful module and request, AVG");
+					spdlog::info("Successful module and request, AVG");
 			}
 			else {
-				logger::critical("Unsuccessful module and request, AVG");
+				spdlog::critical("Unsuccessful module and request, AVG");
 				return nullptr;
 			}
 
@@ -142,9 +114,6 @@ namespace AVG
 
 			if (!intfc) {
 				intfc = reinterpret_cast<InterfaceClass*>(RequestInterface(InterfaceClass::VERSION));
-
-				if constexpr (std::is_same_v<InterfaceClass, CurrentInterface>)
-					Interface = intfc;
 			}
 
 			return intfc;
@@ -188,3 +157,4 @@ namespace AVG
 
 
 }
+
