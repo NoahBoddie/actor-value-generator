@@ -1,9 +1,9 @@
 #pragma once
 
 #include "RoguesGallery/Utility.h"
-#include "Serialization/ISerializer.h"
-#include "Serialization/SerialConstructor.h"
-#include "Serialization/SerializableObject.h"
+#include "Legacy/ISerializer.h"
+#include "Legacy/SerialConstructor.h"
+#include "Legacy/SerializableObject.h"
 //#include "SerializingWrapper.h"
 //free_rul::serializing
 
@@ -117,9 +117,6 @@ namespace RGL
 
 	struct DefaultSerialize;
 	
-	template <class A, class B>
-	struct SerialVector;
-
 	constexpr std::string_view testNAME = TypeName<std::vector<char>>::value;
 
 	//static_assert(testNAME == "std::vector<char, std::allocator<char>>");
@@ -169,6 +166,7 @@ namespace RGL
 	template <class T>
 	bool CheckTypeHash(T& target, TypeHash type_hash)
 	{
+		return true;
 		return target == type_hash;
 	}
 ///End of test field
@@ -477,7 +475,7 @@ namespace RGL
 		std::uint32_t interfaceVersion = SKSE::PluginDeclaration::GetSingleton()->GetVersion().pack();
 		SerializingState serialState;
 
-		SerialArgument(SKSE::SerializationInterface* enter_face, SerializingState state)
+		SerialArgument(SKSE::SerializationInterface* enter_face, SerializingState state, uint32_t ver = -1)
 		{
 			serialInterface = enter_face;
 			serialState = state;
@@ -491,15 +489,22 @@ namespace RGL
 				break;
 			case SerializingState::Deserializing:
 			{
-				uint32_t value_dmp1 = 0;
-				uint32_t value_dmp2 = 0;
-				if (serialInterface->GetNextRecordInfo(value_dmp1, interfaceVersion, value_dmp2) == false){
-					//Finish, log error.
-					logger::warn("No values stored");
+
+				if (ver == -1) {
+					uint32_t value_dmp1 = 0;
+					uint32_t value_dmp2 = 0;
+					if (serialInterface->GetNextRecordInfo(value_dmp1, interfaceVersion, value_dmp2) == false) {
+						//Finish, log error.
+						logger::warn("No values stored");
+					}
+					else {
+						logger::debug("{} length", value_dmp2);
+					}
 				}
 				else {
-					logger::debug("{} length", value_dmp2);
+					interfaceVersion = ver;
 				}
+				
 			}
 			break;
 

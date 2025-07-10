@@ -3,8 +3,13 @@
 
 namespace AVG
 {
+	std::map<RE::FormID, ExtraValueStorage>& ExtraValueStorage::_valueTable =
+		TOME::SerialManager::CreateSerializer<ExtraValueStorage::SerialMapClass, PrimaryRecordType::ExtraValueStorage>();
+
+
 	ExtraValueStorage::ExtraValueStorage(RE::Actor* actor, bool create_default)
 	{
+		initialized = true;
 		ResetStorage(actor, create_default);
 		//*/
 		//This is gonna need a neat organized list of info to perform h
@@ -26,9 +31,9 @@ namespace AVG
 			
 		ReadLock guard{ accessLock };
 
-		auto result = _valueTable->find(actor->formID);
+		auto result = _valueTable.find(actor->formID);
 
-		return result == _valueTable->end() ? nullptr : result->second;
+		return result == _valueTable.end() ? nullptr : &result->second;
 	}
 
 
@@ -48,19 +53,13 @@ namespace AVG
 
 		WriteLock guard{ accessLock };
 		
-		ExtraValueStorage*& storage_spot = (*_valueTable)[actor->formID];
-
-		if (storage_spot) {
-			//logger::warn("Stor loc {}", (uintptr_t)storage_spot);
-			return *storage_spot;
+		ExtraValueStorage& storage = _valueTable[actor->formID];
+		
+		if (!storage.initialized) {
+			storage = ExtraValueStorage{ actor, false };
 		}
 
-
-		ExtraValueStorage* new_storage = new ExtraValueStorage(actor, false);
-
-		storage_spot = new_storage;
-
-		return *new_storage;
+		return storage;
 	}
 
 
@@ -68,9 +67,8 @@ namespace AVG
 	{
 		WriteLock guard{ accessLock };
 
-		if (!_id || _valueTable->contains(_id) == false)
+		if (!_id)
 			return false;
-
 
 		if (_id == 0x14) {
 			logger::debug("PlayerStorage cannot be removed.");
@@ -78,21 +76,19 @@ namespace AVG
 		
 		}
 
-		//needs an initializer part
-		//It will need to search the left hand, the right hand
-		logger::info("[Unregister {:08X} ]", _id);
+		auto removes = _valueTable.erase(_id);
+		if (removes)
+			logger::info("[Unregister {:08X} ]", _id);
+		
 
+		return removes;
+	}
 
-		ExtraValueStorage* storage = _valueTable[_id];
+	void ExtraValueStorage::RemoveAllStorages()
+	{
+		WriteLock guard{ accessLock };
 
-		//LOCK while removing
-
-		_valueTable->erase(_id);
-
-		//delete *cData;
-		delete storage;
-
-		return true;
+		_valueTable.clear();
 	}
 
 	void ExtraValueStorage::ResetStorageImpl(RE::Actor* actor, bool init_default)
@@ -105,14 +101,12 @@ namespace AVG
 		auto size = ExtraValueInfo::GetCountUpto(actor->IsPlayerRef() ? ExtraValueType::Exclusive : ExtraValueType::Adaptive);
 		logger::debug("store size {} for {}", size, actor->GetName());
 		if (size == ExtraValueInfo::FunctionalID) {
-
 			return;  //print error, probbably crash
 		}
-		auto& value_data = _valueData.get();
+		
+		_valueData = std::vector<ExtraValueData>(size, ExtraValueData());
 
-		value_data = std::remove_reference_t<decltype(value_data)>(size, ExtraValueData());
-
-		_recoveryData.get() = ExtraValueInfo::GetRecoverableValues(actor);
+		_recoveryData = ExtraValueInfo::GetRecoverableValues(actor);
 
 
 
@@ -123,7 +117,7 @@ namespace AVG
 
 		//ArgTargetParams tar_params = MakeTargetParamList(actor);
 		//Make this a function plz
-		for (int i = 0; i < value_data.size(); i++) {
+		for (int i = 0; i < _valueData.size(); i++) {
 			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByData(i);
 
 
@@ -142,13 +136,14 @@ namespace AVG
 			// it shapes to whatever default value exists.
 			float base_value = info->GetExtraValueDefault(actor);//update->updateFunction->RunImpl(actor);
 			//should take the target actor.
-			value_data[i]._base = base_value;
+			_valueData[i]._base = base_value;
 		}
 	}
 
 
 	void ExtraValueStorage::ResetStorage(RE::Actor* owner, bool init_default)
 	{
+		//TODO: Holy fucking shit just fucking make this shit a virtual function, it's already a virtual function.
 		if (auto singleton = PlayerStorage::GetSingleton(); singleton == this)
 		{
 			singleton->ResetStorageImpl(RE::PlayerCharacter::GetSingleton(), init_default);
@@ -160,7 +155,5 @@ namespace AVG
 	}
 
 
-
-
-	PlayerStorage& PlayerStorage::_singleton = SerializationHandler::CreatePrimarySerializer<PlayerStorage>(PrimaryRecordType::PlayerStorage);
+	PlayerStorage& PlayerStorage::_singleton = TOME::SerialManager::CreateSerializer<PlayerStorage, PrimaryRecordType::PlayerStorage>();
 }

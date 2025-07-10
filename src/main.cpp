@@ -9,14 +9,13 @@
 
 #include "ValueAliasHandler.h"
 
-#include "Serialization/SerializationTypePlayground.h"
 
 #include "ExtraValue.h"
 
 #include "FileParser.h"
 
 #include "LegacyFunctions.h"
-
+#include "Legacy/LegacySerializer.h"
 //#include "Tome.hpp"
 
 using namespace RE::BSScript;
@@ -70,7 +69,9 @@ namespace {
         //serde->SetLoadCallback(Sample::HitCounterManager::OnGameLoaded);
         //log::trace("Cosave serialization initialized.");
 
-		RGL::MainSerializer::Initialize('AVG');
+		TOME::SerialManager::Register('AVG');
+		AVG::Legacy::Handler::Initialize();
+
     }
 
 

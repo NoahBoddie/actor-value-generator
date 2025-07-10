@@ -2,10 +2,14 @@
 
 #include "Types.h"
 #include "Utility.h"
-#include "Serialization/SerializableList.h"
-#include "Serialization/SerializationTypePlayground.h"
+
+
 namespace AVG
 {
+
+	namespace Legacy {
+		struct  Handler;
+	}
 
 	class ExtraValueInfo;
 	class AdaptiveValueInfo;
@@ -190,67 +194,57 @@ namespace AVG
 	// for functions to be coroutines to be loaded first.
 
 
-	
-
-	struct ExtraValueListT
-	{
-		//The idea of this is that I serialize this, and it serves as the switch between serializing one thing or the other. Kinda dumb
-		// I know but I made this a bit too object focused. UNLESS, I make a primary serializer that's basically just a call back function!
-		// I'm so smart.
-		template <class temp>
-		void operator()(temp& entry, SerialArgument& serializer, bool& success)
-		{
-			
-		}
-	};
 
 
 
     class ExtraValueInfo// : public SerializationHandler//Not actually a serialization handler, the wrapper handles that (for now?)
     {
+
+		friend Legacy::Handler;
+
+
 	protected:
 		ExtraValueInfo() = default;
 
 	public:
-		struct SerializeEntry
+
+		static void Serialize(TOME::SerialBuffer& buffer, bool& result, ExtraValueInfo*& info)
 		{
-			void operator()(ExtraValueInfo*& entry, SerialArgument& serializer, bool& success)
+			constexpr std::string_view invalid = "INVALID";
+
+			std::string name{};
+
+			bool is_saving = buffer.IsSaving();
+
+			if (is_saving)
 			{
-				constexpr std::string_view invalid = "INVALID";
-
-				SerialString name{};
-
-				bool is_saving = serializer.IsSerializing();
-
-				if (is_saving)
-				{
-					if (!entry || entry->IsFunctional() == true)
-						name = std::string{ invalid };
-					else
-						name = std::string{ entry->GetName() };
-				}
-
-
-				serializer.Serialize(name);
-				
-				logger::debug("{} '{}'", is_saving ? "saving" : "loading", name);
-
-				if (!is_saving && name != invalid){
-					entry = ExtraValueInfo::GetValueInfoByName(name);
-				}
+				if (!info || info->IsFunctional() == true)
+					name = std::string{ invalid };
+				else
+					name = std::string{ info->GetName() };
 			}
-		};
 
-		static void SerializeList(SerialArgument& serializer, bool& success)
-		{
-			bool is_saving = serializer.IsSerializing();
+			buffer.Serialize(name);
 
-			serializer.Serialize(is_saving ? _endTypeIndex[0] : _prevEndTypeIndex[0]);
-			serializer.Serialize(is_saving ? _endTypeIndex[1] : _prevEndTypeIndex[1]);
-			serializer.Serialize(is_saving ? _extraValueList : _previousExtraValueList);
+			logger::debug("{} '{}'", is_saving ? "saving" : "loading", name);
+
+			if (!is_saving && name != invalid) {
+				info = ExtraValueInfo::GetValueInfoByName(name);
+			}
 		}
 
-		static inline auto& list_serialize = SerializationHandler::CreatePrimarySerializer<SerialCallback>(PrimaryRecordType::ExtraValueInfo, SerializeList);
+		
+
+		TOME::SerialCallback& _serialCallback =
+			TOME::SerialManager::CreateSerializer<TOME::SerialCallback, PrimaryRecordType::ExtraValueInfo>([](TOME::SerialBuffer& buffer, bool& success)
+				{
+					bool is_saving = buffer.IsSaving();
+
+					buffer.Serialize(is_saving ? _endTypeIndex[0] : _prevEndTypeIndex[0]);
+					buffer.Serialize(is_saving ? _endTypeIndex[1] : _prevEndTypeIndex[1]);
+					buffer.Serialize(is_saving ? _extraValueList : _previousExtraValueList);
+				});
+		
 
 
 		enum ExtraValueType
@@ -290,7 +284,7 @@ namespace AVG
 		//This only serializes 1 and 2 from the original
 		static inline DataID _prevEndTypeIndex[ExtraValueType::Functional];
         //I would like to give this a rule in that it can only deserialize non-functional values. The same should go on other vector.
-        static inline SerialVector<ExtraValueInfo*, SerializeEntry> _previousExtraValueList;
+        static inline std::vector<ExtraValueInfo*> _previousExtraValueList;
 
         // Should require validation. This is also the manifest now. When serialized, we just serialize the strings in
         // sequence.
@@ -303,6 +297,7 @@ namespace AVG
         //static inline std::map<std::string, ExtraValueInfo*> _infoTable;
 
 
+		
 		//Could make a macro for the manipulation of this, with a built in null condition check.
 		static inline std::array<std::vector<ExtraValueInfo*>, ExtraValueType::Total>* _infoTypeMap = new std::array<std::vector<ExtraValueInfo*>, ExtraValueType::Total>();
 
@@ -324,7 +319,7 @@ namespace AVG
 		//std::array <ExtraValueInfo*, (int)RE::ActorValue::kTotal> _overrideValues;
 
 
-		static inline SerialVector<ExtraValueInfo*, SerializeEntry> _extraValueList;
+		static inline std::vector<ExtraValueInfo*> _extraValueList;
 
 
     public:
@@ -332,9 +327,9 @@ namespace AVG
 
 		static ExtraValueInfo* GetValueInfoByName(std::string name)
 		{
-			auto result = std::find_if(_extraValueList->begin(), _extraValueList->end(), [=](auto it) { return Utility::StrCmpI(it->valueName, name); });
+			auto result = std::find_if(_extraValueList.begin(), _extraValueList.end(), [=](auto it) { return Utility::StrCmpI(it->valueName, name); });
 
-			if (_extraValueList->end() == result)
+			if (_extraValueList.end() == result)
 				return nullptr;
 
 			return *result;
@@ -522,11 +517,11 @@ namespace AVG
 				_endTypeIndex[1] = excl_list.size() + _endTypeIndex[0];
 				_endTypeIndex[2] = func_list.size() + _endTypeIndex[1];
 				
-				_extraValueList->reserve(GetCount());
+				_extraValueList.reserve(GetCount());
 
-				_extraValueList->insert(_extraValueList->end(), adapt_list.begin(), adapt_list.end());
-				_extraValueList->insert(_extraValueList->end(), excl_list.begin(), excl_list.end());
-				_extraValueList->insert(_extraValueList->end(), func_list.begin(), func_list.end());
+				_extraValueList.insert(_extraValueList.end(), adapt_list.begin(), adapt_list.end());
+				_extraValueList.insert(_extraValueList.end(), excl_list.begin(), excl_list.end());
+				_extraValueList.insert(_extraValueList.end(), func_list.begin(), func_list.end());
 			}
 
 			delete _infoTypeMap;
@@ -537,7 +532,7 @@ namespace AVG
 				GetCount(ExtraValueType::Functional),
 				GetCount(ExtraValueType::Total));
 
-			for (auto& entry : *_extraValueList)
+			for (auto& entry : _extraValueList)
 			{
 				logger::info("ExtraValue '{}', ID {}", entry->GetFixedName(), entry->GetValueID());
 			}

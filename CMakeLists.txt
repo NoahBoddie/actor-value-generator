@@ -6,7 +6,7 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ########################################################################################################################
 project(
         ActorValueGenerator
-        VERSION 2.0.0.5
+        VERSION 2.0.0.6
         DESCRIPTION "An SKSE modding tool that enables users to make new actor values as well as extending their existing functionally."
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
@@ -36,20 +36,22 @@ set(headers
 )
 
 set(sources
-        src/Serialization/ISerializer.h
-        src/Serialization/SerialArgument.h
-        src/Serialization/SerialComponent.h
-        src/Serialization/SerialConstructor.h
-        src/Serialization/SerialIterator.h
-        src/Serialization/SerializableList.h
-        src/Serialization/SerializableMap.h
-        src/Serialization/SerializableObject.h
-        src/Serialization/SerializablePair.h
-        src/Serialization/SerializationTypePlayground.h
-        src/Serialization/SerializingWrapper.h
+        src/Legacy/LegacySerializer.h
+        src/Legacy/ISerializer.h
+        src/Legacy/SerialArgument.h
+        src/Legacy/SerialComponent.h
+        src/Legacy/SerialConstructor.h
+        src/Legacy/SerialIterator.h
+        src/Legacy/SerializableList.h
+        src/Legacy/SerializableMap.h
+        src/Legacy/SerializableObject.h
+        src/Legacy/SerializablePair.h
+        src/Legacy/SerializationTypePlayground.h
+        src/Legacy/SerializingWrapper.h
 
       
         
+        src/Impl/Enums.h
         src/ExtraNPC.h
         src/Types.h
         src/LegacyFunctions.h

@@ -1,7 +1,7 @@
 #pragma once
 
-#include "Serialization/SerialIterator.h"
-#include "Serialization/SerializingWrapper.h"
+#include "Legacy/SerialIterator.h"
+#include "Legacy/SerializingWrapper.h"
 
 namespace RGL
 {

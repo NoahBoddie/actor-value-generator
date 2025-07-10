@@ -3,10 +3,12 @@
 #include "Types.h"
 
 #include "ExtraValueInfo.h"//Put in cpp please pepeW
-#include "Serialization/SerialConstructor.h"
-#include "Serialization/SerializationTypePlayground.h"
+
 namespace AVG
 {
+	namespace Legacy {
+		struct  Handler;
+	}
 	enum class StoragePriority
 	{
 		Low,		//Lowest priority, EV Storage will be dumped into a cache. Actor mustn't have an active effect list for this
@@ -175,8 +177,10 @@ namespace AVG
 	
 	struct PlayerStorage;
 
-	class ExtraValueStorage : public SerializationHandler
+	class ExtraValueStorage
 	{
+		friend Legacy::Handler;
+
 	private:
 		using Mutex = std::shared_mutex;
 		using ReadLock = std::shared_lock<Mutex>;
@@ -193,55 +197,186 @@ namespace AVG
 
 	public:
 		
+
+		virtual void HandleSerialize(TOME::SerialBuffer& buffer, bool& result)
+		{
+
+			using T = ExtraValueData;
+			constexpr bool consttest1 = TOME::serial_data<ExtraValueData>;
+			constexpr bool consttest2 = std::is_trivially_move_assignable_v<T> && std::is_trivially_move_constructible_v<T> && !pointer_type<T> && !std::is_polymorphic_v<T>;
+			
+			//TODO: List the actual version dude.
+			buffer.Serialize(_tickValue, 1 << 8 * 3);
+
+			if (buffer.IsSaving() == true) {
+				int vect_size = _valueData.size();
+				int mani_size = ExtraValueInfo::GetCountUpto(ExtraValueType::Exclusive);
+
+				logger::debug("SAVING: {} vs {}", vect_size, mani_size);
+
+				buffer.Serialize(_valueData);
+				buffer.Serialize(_recoveryData);
+			}
+			else
+			{
+				std::vector<ExtraValueData> value_dump;
+				std::vector<std::pair<DataID, RegenData>> recover_dump;
+
+
+
+				buffer.Serialize(value_dump);
+				buffer.Serialize(recover_dump);
+
+				//Should I algorithm for this?
+
+
+				int vect_size = value_dump.size();
+				int mani_size = ExtraValueInfo::GetManifestCount();
+
+				logger::debug("LOADING: {} vs {}", vect_size, mani_size);
+
+				//Removing a check for manifest size because then it will won't init
+				// new actor values when loading an actor in.
+				for (uint32_t i = 0; i < vect_size && i < mani_size; i++)
+				{
+					//If I can only show these once per cycle, that would be great.
+					ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByManifest(i);
+
+
+					if (!info) {
+						if (i < mani_size)
+							logger::warn("ExtraValueInfo at {} not found. Tossing data.", i);
+
+						continue;
+					}
+
+					DataID id = info->GetDataID();
+
+					if (id == ExtraValueInfo::FunctionalID) {
+						logger::warn("ExtraValueInfo {}({}) is now functional. Tossing data.", info->GetName(), id);
+						continue;
+					}
+
+					//If this is an npc storage && info is exclusive, continue
+					logger::debug("Deserializing '{}'. Value: [{}/{}/{}/{}], {} -> {}",
+						info->GetName(),
+						value_dump[i]._base,
+						value_dump[i]._evMods[0],
+						value_dump[i]._evMods[1],
+						value_dump[i]._evMods[2],
+						i, id);
+
+					_valueData[id] = value_dump[i];
+
+				}
+
+
+				for (uint32_t i = 0; i < recover_dump.size(); i++)
+				{
+					std::pair<DataID, RegenData>& rec_data = recover_dump[i];
+
+					//If it's zero, who gives a shit, these don't have a default value of anything.
+					if ((isnan(rec_data.second._pool) || rec_data.second._pool <= 0) && rec_data.second._time <= 0) {
+						logger::debug("Regen data {} trivial, skipping deserialization.", i);
+						continue;
+
+					}
+
+					ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByManifest(rec_data.first);
+
+					if (!info || info->GetRecoverInfo() == nullptr) {
+						logger::warn("ExtraValueInfo at {} not found. Tossing regen data.", i);
+						continue;
+					}
+					DataID id = info->GetDataID();
+
+					if (id == ExtraValueInfo::FunctionalID) {
+						logger::warn("ExtraValueInfo at {} has become functional. Tossing regen data.", i);
+						continue;
+					}
+
+
+					auto predicate = [=](std::pair<DataID, RegenData> pair) {
+						return pair.first == id;
+						};
+
+					//If this is an npc storage && info is exclusive, continue
+					auto result = std::find_if(_recoveryData.begin(), _recoveryData.end(), predicate);
+					;
+					if (_recoveryData.end() != result) {
+						logger::debug("Deserializing '{}' Recovery Data. : [{}/{}], {} -> {}",
+							info->GetName(),
+							rec_data.second._time,
+							rec_data.second._pool,
+							rec_data.first, id);
+
+						result->second = rec_data.second;
+					}
+					else {
+						logger::debug("'{}''s Recovery Data failed to Deserialize.", info->GetName());
+					}
+				}
+			}
+		}
+
+		static void Serialize(TOME::SerialBuffer& buffer, bool& result, ExtraValueStorage& storage)
+		{
+			storage.HandleSerialize(buffer, result);
+		}
+
+
 		struct SerializeClass
 		{
-			void operator()(std::pair<const SerialFormID, ExtraValueStorage*>& entry, SerialArgument& serializer, bool& success)
+
+			void operator()(TOME::SerialBuffer& buffer, bool& result, std::pair<RE::FormID, ExtraValueStorage>& entry)
 			{
+
 				WriteLock guard{ accessLock };
 
-				success = serializer.Serialize(entry.first);//Needs to be a particular type of object, serializable formID
+				result = buffer.SerializeFormID(entry.first);//Needs to be a particular type of object, serializable formID
 
 
-				bool is_deserializing = serializer.IsDeserializing();
+				if (result && buffer.IsLoading() == true) {
+					 RE::Actor* actor = RE::TESForm::LookupByID<RE::Actor>(entry.first);
 
-				if (success && is_deserializing == true) {
-					RE::Actor* actor = nullptr;
-					if (success) {
-						actor = RE::TESForm::LookupByID<RE::Actor>(entry.first);
-
-						if (!actor) {
-							logger::error("Actor FormID {:08X} invalid, dumping.", static_cast<RE::FormID>(entry.first));
-							success = false;
-						}
-						else {
-							logger::info("Actor {}(FormID:{:08X}) successful, creating and deserializing.", actor->GetName(), static_cast<RE::FormID>(entry.first));
-							entry.second = new ExtraValueStorage(actor, true);
-						}
+					if (!actor) {
+						logger::error("Actor FormID {:08X} invalid, dumping.", static_cast<RE::FormID>(entry.first));
+						result = false;
 					}
-					else
-					{
-						logger::error("Failure deserializing form ID.");
+					else {
+						logger::info("Actor {}(FormID:{:08X}) successful, creating and deserializing.", actor->GetName(), static_cast<RE::FormID>(entry.first));
+						entry.second = ExtraValueStorage{ actor, true };
 					}
 				}
 
-				//If the pointer is null or the success is false, it will dump the data, and return unsuccessful.
-				success = serializer.DumpIfFailure(entry.second, success);
 
-				if (success)
-					logger::info("serialized: {:08X} at {:08X}", static_cast<RE::FormID>(entry.first), (uint64_t)entry.second);
+				//If the pointer is null or the success is false, it will dump the data, and return unsuccessful.
+				result = buffer.DiscardFailure(entry.second, result);
+
+				if (result)
+					logger::info("serialized: {:08X}", static_cast<RE::FormID>(entry.first));
 				else
 					logger::error("failed to de/serialize");
-			}
-			
-			void operator()(std::map<SerialFormID, ExtraValueStorage*>&)
-			{
-				logger::debug("Reverting extra value storage");
-				RemoveAllStorages();
+
+
+				
+
 			}
 		};
 
-		using EVStorageMap = SerializableMap<SerialFormID, ExtraValueStorage*, SerializeClass, SerializeClass>;
 
+		//using EVStorageMap = SerializableMap<SerialFormID, ExtraValueStorage*, SerializeClass, SerializeClass>;
+		//This should NOT be using the LogHandler, instead it should be using something that loads the default data of the second part properly.
+		using SerialMapClass2 = TOME::map_entry_handler<TOME::LogHandler>::type<std::map<TOME::FormID, ExtraValueStorage>>;
+
+		using SerialMapClass = TOME::SerialHandler<std::map<RE::FormID, ExtraValueStorage>, SerializeClass>;
+
+		static std::map<RE::FormID, ExtraValueStorage>& _valueTable;
+
+		void BIGTEST()
+		{
+			constexpr bool test = TOME::is_serial_wrapper_v<SerialMapClass2>;
+		}
 
 	//static
 	private:
@@ -249,13 +384,7 @@ namespace AVG
 
 
 
-		//May make these unique, and only give out regular pointers.
-		//inline static EVStorageMap& _valueTable = Initializer<EVStorageMap, PrimaryRecordType>(HandlePrimarySerializer, PrimaryRecordType::ExtraValueStorage);
-		inline static EVStorageMap& _valueTable = SerializationHandler::CreatePrimarySerializer<EVStorageMap>(PrimaryRecordType::ExtraValueStorage);
-		//inline static std::map<RE::FormID, ExtraValueStorage*>* _valueTable = nullptr;
-	
 	protected:
-		ExtraValueStorage() = default;
 
 
 		void ResetStorageImpl(RE::Actor* actor, bool init_default);
@@ -275,17 +404,7 @@ namespace AVG
 
 		static bool RemoveStorage(RE::FormID _id);
 
-		static void RemoveAllStorages()
-		{
-			WriteLock guard{ accessLock };
-
-			for (auto& store_pair : *_valueTable)
-			{
-				delete store_pair.second;
-			}
-
-			_valueTable->clear();
-		}
+		static void RemoveAllStorages();
 
 	//membered
 		//This should delete it's copy assignment and intializers.
@@ -293,27 +412,31 @@ namespace AVG
 	protected:
 
 	public:
-		SerialVector<ExtraValueData> _valueData;
+		std::vector<ExtraValueData> _valueData;
 
 		//This serves as both a map and manifest. And while, yes, this is a vector, ideally the data is concurent, never to be deleted
 		// until it no longer exists.
 		//I think I MAY, want to introduce pooling into this.
 
 		
-		SerialVector<std::pair<DataID, RegenData>> _recoveryData;
+		std::vector<std::pair<DataID, RegenData>> _recoveryData;
 		
 		float _tickValue = 0;
 		
 		float lastGameTime = 0;
+		
+		bool initialized = false;
+
+		ExtraValueStorage() = default;
 
 		ExtraValueStorage(RE::Actor* actor, bool uses_default);
 		
 	public:
 		float* GetExtraValueDelay(DataID id)
 		{//switch to binary search if it's sorted
-			auto result = std::find_if(_recoveryData->begin(), _recoveryData->end(), [=](auto it) { return it.first == id; });
+			auto result = std::find_if(_recoveryData.begin(), _recoveryData.end(), [=](auto it) { return it.first == id; });
 
-			if (_recoveryData->end() != result) {
+			if (_recoveryData.end() != result) {
 				return &result->second._time;
 			}
 
@@ -526,7 +649,7 @@ namespace AVG
 
 			_tickValue = 0;
 
-			for (int i = 0; i < _recoveryData.GetSize(); i++){
+			for (int i = 0; i < _recoveryData.size(); i++){
 				std::pair<DataID, RegenData>& entry = _recoveryData[i];
 
 				ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByData(entry.first);
@@ -541,120 +664,6 @@ namespace AVG
 		}
 
 
-		void HandleSerialize(SerialArgument& serializer, bool& success) override 
-		{ 
-			serializer.Serialize(_tickValue, 1 << 8 * 3);
-
-			if (serializer.IsSerializing() == true) {
-				int vect_size = _valueData->size();
-				int mani_size = ExtraValueInfo::GetCountUpto(ExtraValueType::Exclusive);
-
-				logger::debug("SAVING: {} vs {}", vect_size, mani_size);
-				
-				serializer.Serialize(_valueData);
-				serializer.Serialize(_recoveryData);
-			}
-			else 
-			{
-				SerialVector<ExtraValueData> value_dump;
-				SerialVector<std::pair<DataID, RegenData>> recover_dump;
-
-
-				
-				serializer.Serialize(value_dump);
-				serializer.Serialize(recover_dump);
-
-				//Should I algorithm for this?
-
-				
-				int vect_size = value_dump->size();
-				int mani_size = ExtraValueInfo::GetManifestCount();
-
-				logger::debug("LOADING: {} vs {}", vect_size, mani_size);
-
-				//Removing a check for manifest size because then it will won't init
-				// new actor values when loading an actor in.
-				for (uint32_t i = 0; i < vect_size && i < mani_size; i++)
-				{
-					//If I can only show these once per cycle, that would be great.
-					ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByManifest(i);
-					
-
-					if (!info) {
-						if (i < mani_size)
-							logger::warn("ExtraValueInfo at {} not found. Tossing data.", i);
-
-						continue;
-					}
-
-					DataID id = info->GetDataID();
-
-					if (id == ExtraValueInfo::FunctionalID) {
-						logger::warn("ExtraValueInfo {}({}) is now functional. Tossing data.", info->GetName(), id);
-						continue;
-					}
-					
-					//If this is an npc storage && info is exclusive, continue
-					logger::debug("Deserializing '{}'. Value: [{}/{}/{}/{}], {} -> {}", 
-						info->GetName(), 
-						value_dump[i]._base, 
-						value_dump[i]._evMods[0], 
-						value_dump[i]._evMods[1], 
-						value_dump[i]._evMods[2], 
-						i, id);
-
-					_valueData[id] = value_dump[i];
-
-				}
-				
-
-				for (uint32_t i = 0; i < recover_dump->size(); i++)
-				{
-					std::pair<DataID, RegenData>& rec_data = recover_dump[i];
-
-					//If it's zero, who gives a shit, these don't have a default value of anything.
-					if ((isnan(rec_data.second._pool) || rec_data.second._pool <= 0) && rec_data.second._time <= 0) {
-						logger::debug("Regen data {} trivial, skipping deserialization.", i);
-						continue;
-
-					}
-
-					ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByManifest(rec_data.first);
-
-					if (!info || info->GetRecoverInfo() == nullptr) {
-						logger::warn("ExtraValueInfo at {} not found. Tossing regen data.", i);
-						continue;
-					}
-					DataID id = info->GetDataID();
-
-					if (id == ExtraValueInfo::FunctionalID) {
-						logger::warn("ExtraValueInfo at {} has become functional. Tossing regen data.", i);
-						continue;
-					}
-						
-
-					auto predicate = [=](std::pair<DataID, RegenData> pair) {
-						return pair.first == id;
-					};
-
-					//If this is an npc storage && info is exclusive, continue
-					auto result = std::find_if(_recoveryData->begin(), _recoveryData->end(), predicate);
-			;
-					if (_recoveryData->end() != result) {
-						logger::debug("Deserializing '{}' Recovery Data. : [{}/{}], {} -> {}",
-							info->GetName(),
-							rec_data.second._time,
-							rec_data.second._pool,
-							rec_data.first, id);
-
-						result->second = rec_data.second;
-					}
-					else {
-						logger::debug("'{}''s Recovery Data failed to Deserialize.", info->GetName());
-					}
-				}
-			}
-		}
 
 	};
 
@@ -670,12 +679,12 @@ namespace AVG
 		//Would like this to be unordered some time.
 	public:
 		//Could order this to make searching easy
-		SerialVector<std::pair<DataID, SkillData>> _skillMap;
+		std::vector<std::pair<DataID, SkillData>> _skillMap;
 
 		SkillData& GetSkillData(DataID id)
 		{
 			//I'm just gonna run it.
-			auto result = std::find_if(_skillMap->begin(), _skillMap->end(), [id](auto&& pair) {return id == pair.first; });
+			auto result = std::find_if(_skillMap.begin(), _skillMap.end(), [id](auto&& pair) {return id == pair.first; });
 
 			return result->second;
 		}
@@ -720,22 +729,28 @@ namespace AVG
 			return player_storage;
 		}
 
-		void Revert() override 
+
+		static void HandleRevert(PlayerStorage& storage)
 		{
+			constexpr bool test = TOME::detail::static_revertable<PlayerStorage>;
 			logger::debug("Reverting player storage");
-			_playable = false;
+			storage._playable = false;
 		}
+
+
 		
-		void HandleSerialize(SerialArgument& serializer, bool& success) override
+
+		
+		void HandleSerialize(TOME::SerialBuffer& buffer, bool& result) override
 		{
-			if (serializer.IsDeserializing() == true)
+			if (buffer.IsLoading() == true)
 			{
 				logger::debug("Making new player storage");
 				//this should just be ResetStorageImpl honestly.
 				*this = PlayerStorage(true);
 			}
 			
-			__super::HandleSerialize(serializer, success);
+			__super::HandleSerialize(buffer, result);
 			
 			//Here is where I'll do the skill stuff.
 		}
@@ -757,7 +772,7 @@ namespace AVG
 			if (!player)
 				player = RE::PlayerCharacter::GetSingleton();
 
-			for (auto& [data_id, skill_data] : *_skillMap)
+			for (auto& [data_id, skill_data] : _skillMap)
 			{
 				ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByData(data_id);
 
@@ -788,12 +803,12 @@ namespace AVG
 		{
 			__super::ResetStorageImpl(owner, init_default);
 
-			if (_valueData->size() == 0)
+			if (_valueData.size() == 0)
 				return;
 
 			auto* player = RE::PlayerCharacter::GetSingleton();
 
-			auto& skill_map = _skillMap.get();
+			auto& skill_map = _skillMap;
 
 
 			skill_map = ExtraValueInfo::GetSkillfulValues(owner);
@@ -816,7 +831,7 @@ namespace AVG
 			
 			//if deserializing, we won't really do anything, just create it.
 
-			//auto size = _valueData->size();;
+			//auto size = _valueData.size();;
 			
 			
 

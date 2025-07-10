@@ -140,6 +140,7 @@
 
 #include "Plugin.h"
 
+#include "Impl/Enums.h"
 
 
 namespace AVG
