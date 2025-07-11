@@ -409,7 +409,9 @@ namespace AVG::Legacy
 				}
 				case PrimaryRecordType::PlayerStorage: {
 					//I'm doing this like this because the fucking PlayerSingleton data is a fucking mess. Fix it. Please.
-					PrimaryHandle handler{ reinterpret_cast<legPlayerStorage&>(*PlayerStorage::GetSingleton()) };
+					auto player = PlayerStorage::GetSingleton();
+					player->ResetStorage(true);
+					PrimaryHandle handler{ reinterpret_cast<legPlayerStorage&>(*player) };
 					arg.Serialize(handler);
 					//*PlayerStorage::GetSingleton() = std::move(player.GetWrapObject());
 					break;

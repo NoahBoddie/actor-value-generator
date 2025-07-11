@@ -198,7 +198,7 @@ namespace AVG
 	public:
 		
 
-		virtual void HandleSerialize(TOME::SerialBuffer& buffer, bool& result)
+		virtual void Serialize(TOME::SerialBuffer& buffer, bool& result)
 		{
 
 			using T = ExtraValueData;
@@ -239,6 +239,7 @@ namespace AVG
 				// new actor values when loading an actor in.
 				for (uint32_t i = 0; i < vect_size && i < mani_size; i++)
 				{
+					//TODO: Turn this into a function I can use.
 					//If I can only show these once per cycle, that would be great.
 					ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByManifest(i);
 
@@ -319,9 +320,9 @@ namespace AVG
 			}
 		}
 
-		static void Serialize(TOME::SerialBuffer& buffer, bool& result, ExtraValueStorage& storage)
+		static void HandleSerialize(TOME::SerialBuffer& buffer, bool& result, ExtraValueStorage& storage)
 		{
-			storage.HandleSerialize(buffer, result);
+			storage.Serialize(buffer, result);
 		}
 
 
@@ -389,12 +390,17 @@ namespace AVG
 
 		void ResetStorageImpl(RE::Actor* actor, bool init_default);
 
-		
+
 
 
 	public:
-		void ResetStorage(RE::Actor* owner, bool init_default = false);
 
+
+
+		virtual void ResetStorage(RE::Actor* actor, bool init_default = false)
+		{
+			return ResetStorageImpl(actor, init_default);
+		}
 
 		static ExtraValueStorage* GetStorage(RE::Actor* actor);
 
@@ -681,12 +687,17 @@ namespace AVG
 		//Could order this to make searching easy
 		std::vector<std::pair<DataID, SkillData>> _skillMap;
 
-		SkillData& GetSkillData(DataID id)
+		SkillData* GetSkillData(DataID id)
 		{
 			//I'm just gonna run it.
-			auto result = std::find_if(_skillMap.begin(), _skillMap.end(), [id](auto&& pair) {return id == pair.first; });
 
-			return result->second;
+			auto it = _skillMap.begin();
+			auto end = _skillMap.end();
+
+			it = std::find_if(it, end, [id](auto&& pair) {return id == pair.first; });
+
+			
+			return it != end ? &it->second : nullptr;
 		}
 
 	public:
@@ -741,16 +752,61 @@ namespace AVG
 		
 
 		
-		void HandleSerialize(TOME::SerialBuffer& buffer, bool& result) override
+		void Serialize(TOME::SerialBuffer& buffer, bool& result) override
 		{
 			if (buffer.IsLoading() == true)
 			{
 				logger::debug("Making new player storage");
 				//this should just be ResetStorageImpl honestly.
-				*this = PlayerStorage(true);
+				ResetStorage(true);
 			}
 			
-			__super::HandleSerialize(buffer, result);
+			constexpr bool serialize_skill = true;
+
+			if constexpr (serialize_skill)
+			{
+				decltype(_skillMap) dataBuff;
+
+				bool is_saving = buffer.IsSaving();
+
+				buffer.Serialize(is_saving ? _skillMap : dataBuff, "2.0.0.7"_v.pack());
+
+				if (!is_saving && dataBuff.size())
+				{
+					for (auto& [prev_id, data] : dataBuff)
+					{
+						ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByManifest(prev_id);
+
+						if (!info) {
+							logger::warn("ExtraValueInfo at DataID {} not found. Tossing data.", prev_id);
+							continue;
+						}
+
+						DataID id = info->GetDataID();
+
+						if (id == ExtraValueInfo::FunctionalID) {
+							logger::warn("ExtraValueInfo {}({}) is now functional. Tossing data.", info->GetName(), id);
+							continue;
+						}
+
+						SkillData* skill_data = GetSkillData(id);
+
+						if (skill_data) {
+							//This is all I care about in reality, the rest of the data may get saved on accident but I couldn't
+							// give a shit about it to be real.
+							skill_data->xp = data.xp;
+							skill_data->xp = data.legendaryLevels;
+						}
+						else {
+							logger::warn("Extra Value {}({}) no longer accepted as skill. Tossing Data.", info->GetName(), id);
+						}
+
+
+					}
+				}
+			}
+
+			__super::Serialize(buffer, result);
 			
 			//Here is where I'll do the skill stuff.
 		}
@@ -799,10 +855,8 @@ namespace AVG
 	protected:
 		friend class ExtraValueStorage;
 		
-		void ResetStorageImpl(RE::PlayerCharacter* owner, bool init_default)
+		void ResetStorageImpl(bool init_default)
 		{
-			__super::ResetStorageImpl(owner, init_default);
-
 			if (_valueData.size() == 0)
 				return;
 
@@ -811,7 +865,7 @@ namespace AVG
 			auto& skill_map = _skillMap;
 
 
-			skill_map = ExtraValueInfo::GetSkillfulValues(owner);
+			skill_map = ExtraValueInfo::GetSkillfulValues(player);
 
 			if (init_default)
 				_playable = true;
@@ -820,9 +874,21 @@ namespace AVG
 		}
 
 	public:
+		void ResetStorage(RE::Actor* actor, bool init_default = false) override
+		{
+			if (!actor || actor->IsPlayerRef() == false) {
+				logger::error("Actor in PlayerStorage::ResetStorage is not the player. ({:08X})", actor ? actor->formID : 0);
+				return;
+			}
+
+			ResetStorageImpl(init_default);
+
+			return __super::ResetStorage(actor, init_default);
+		}
+
 		void ResetStorage(bool init_default)
 		{
-			ResetStorageImpl(RE::PlayerCharacter::GetSingleton(), init_default);
+			return ResetStorage(RE::PlayerCharacter::GetSingleton(), init_default);
 		}
 
 
@@ -835,7 +901,7 @@ namespace AVG
 			
 			
 
-			ResetStorageImpl(RE::PlayerCharacter::GetSingleton(), use_default);
+			ResetStorageImpl(use_default);
 		}
 	};
 }

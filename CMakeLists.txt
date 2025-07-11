@@ -6,7 +6,7 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ########################################################################################################################
 project(
         ActorValueGenerator
-        VERSION 2.0.0.6
+        VERSION 2.0.0.7
         DESCRIPTION "An SKSE modding tool that enables users to make new actor values as well as extending their existing functionally."
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)

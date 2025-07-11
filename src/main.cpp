@@ -336,77 +336,80 @@ namespace {
 
 	void InitializeLexiconMessaging()
 	{
+		
 		using LEX::LinkFlag;
 
 		//If I can, I'd like to make an initialize script based around this.
-		if (!LEX::LinkMessenger::instance->RegisterForLink([](LinkFlag flag) {
-
-
-			switch (flag) {
-				// Skyrim lifecycle events.
-			case LinkFlag::Loaded: // Called after all plugins have finished running SKSEPlugin_Load.
-				FormExtraValueHandler::Register();
-				//ArithmeticAPI::RequestInterface();
-				//ActorValueGeneratorAPI::RequestInterface();
-				{
-
-					logger::info("Starting...");
-					LEX::IProject* avg = nullptr;
-
-					if (LEX::ProjectManager::instance->CreateProject("ActorValueGenerator", nullptr, avg) != LEX::APIResult::Success)
+		if (LEX::LinkMessenger::instance && !LEX::LinkMessenger::instance->RegisterForLink([](LinkFlag flag) {
+			InvokeOrExit([flag]()
+			{
+				switch (flag) {
+					// Skyrim lifecycle events.
+				case LinkFlag::Loaded: // Called after all plugins have finished running SKSEPlugin_Load.
+					FormExtraValueHandler::Register();
+					//ArithmeticAPI::RequestInterface();
+					//ActorValueGeneratorAPI::RequestInterface();
 					{
-						logger::info("AVG has experienced failure");
-					}
 
-					commons = avg->GetCommons();
+						logger::info("Starting...");
+						LEX::IProject* avg = nullptr;
 
-					if (avg) {
-						//IProject* project, std::string_view name, std::string_view path, std::string_view content, IScript*& out, std::span<std::string_view> options = {}
-						//if (LEX::ProjectManager::instance->CreateScript(avg, "__Legacy__", "", "", &legacy, std::vector<std::string_view>{"incremental"}) != LEX::APIResult::Success) {
-						std::vector<std::string_view>incremental{ "incremental" };
-						if (LEX::ProjectManager::instance->CreateScript(avg, "__Legacy__", "", "", legacy, incremental) != LEX::APIResult::Success) {
-							logger::info("ETU* Legacy has failured to create");
+						if (LEX::ProjectManager::instance->CreateProject("ActorValueGenerator", nullptr, avg) != LEX::APIResult::Success)
+						{
+							logger::info("AVG has experienced failure");
 						}
+
+						commons = avg->GetCommons();
+
+						if (avg) {
+							//IProject* project, std::string_view name, std::string_view path, std::string_view content, IScript*& out, std::span<std::string_view> options = {}
+							//if (LEX::ProjectManager::instance->CreateScript(avg, "__Legacy__", "", "", &legacy, std::vector<std::string_view>{"incremental"}) != LEX::APIResult::Success) {
+							std::vector<std::string_view>incremental{ "incremental" };
+							if (LEX::ProjectManager::instance->CreateScript(avg, "__Legacy__", "", "", legacy, incremental) != LEX::APIResult::Success) {
+								logger::info("ETU* Legacy has failured to create");
+							}
+						}
+
+						logger::info("Ending?... {} {}", !!avg, !!legacy);
+					}
+					break;
+
+
+				case LinkFlag::Definition: // Called when all game data has been found.
+					PersonalLoad();
+					break;
+
+				case LinkFlag::External: // All ESM/ESL/ESP plugins have loaded, main menu is now active.
+					if (legacy->AppendContent("int test_legacy = 69;") == false)
+					{
+						logger::info("ETU* failure");
+					}
+					else {
+						logger::info("ETU* legacy >> {}", LEX::Formula<int>::Run("test_legacy * 1", legacy, 420));
 					}
 
-					logger::info("Ending?... {} {}", !!avg, !!legacy);
-				}
-				break;
+
+					FormExtraValueHandler::Initialize();
+					InitializeHooking();
+					{
+						//auto testForm = LEX::Formula<float(RE::Actor::*)()>::Create("30 + (HasKeyword(props::PlayerKeyword) * 20) + GetActorValue2('StrengthAdaptive', props::All)");
+
+						//auto value = testForm(RE::PlayerCharacter::GetSingleton());
+
+						commons = LEX::ProjectManager::instance->GetScriptFromPath("ActorValueGenerator::Commons");
+						//legacy = LEX::ProjectManager::instance->GetScriptFromPath("ActorValueGenerator::Commons");
+
+						logger::info("Project {}", LEX::Formula<float>::Run("GetPlayer().ProjectTest()", commons));
 
 
-			case LinkFlag::Definition: // Called when all game data has been found.
-				PersonalLoad();
-				break;
 
-			case LinkFlag::External: // All ESM/ESL/ESP plugins have loaded, main menu is now active.
-				if (legacy->AppendContent("int test_legacy = 69;") == false)
-				{
-					logger::info("ETU* failure");
-				}
-				else {
-					logger::info("ETU* legacy >> {}", LEX::Formula<int>::Run("test_legacy * 1", legacy, 420));
-				}
+					}
 
-
-				FormExtraValueHandler::Initialize();
-				InitializeHooking();
-				{
-					//auto testForm = LEX::Formula<float(RE::Actor::*)()>::Create("30 + (HasKeyword(props::PlayerKeyword) * 20) + GetActorValue2('StrengthAdaptive', props::All)");
-
-					//auto value = testForm(RE::PlayerCharacter::GetSingleton());
-
-					commons = LEX::ProjectManager::instance->GetScriptFromPath("ActorValueGenerator::Commons");
-					//legacy = LEX::ProjectManager::instance->GetScriptFromPath("ActorValueGenerator::Commons");
-
-					logger::info("Project {}", LEX::Formula<float>::Run("GetPlayer().ProjectTest()", commons));
-
-
+					break;
 
 				}
+			});
 
-				break;
-
-			}
 			})) {
 			stl::report_and_fail("Unable to register Lexicon linkage messenger.");
 			throw nullptr;

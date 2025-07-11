@@ -208,7 +208,7 @@ namespace AVG
 
 	public:
 
-		static void Serialize(TOME::SerialBuffer& buffer, bool& result, ExtraValueInfo*& info)
+		static void HandleSerialize(TOME::SerialBuffer& buffer, bool& result, ExtraValueInfo*& info)
 		{
 			constexpr std::string_view invalid = "INVALID";
 

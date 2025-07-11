@@ -10,7 +10,7 @@ namespace AVG
 	ExtraValueStorage::ExtraValueStorage(RE::Actor* actor, bool create_default)
 	{
 		initialized = true;
-		ResetStorage(actor, create_default);
+		ResetStorageImpl(actor, create_default);
 		//*/
 		//This is gonna need a neat organized list of info to perform h
 	}
@@ -140,19 +140,6 @@ namespace AVG
 		}
 	}
 
-
-	void ExtraValueStorage::ResetStorage(RE::Actor* owner, bool init_default)
-	{
-		//TODO: Holy fucking shit just fucking make this shit a virtual function, it's already a virtual function.
-		if (auto singleton = PlayerStorage::GetSingleton(); singleton == this)
-		{
-			singleton->ResetStorageImpl(RE::PlayerCharacter::GetSingleton(), init_default);
-		}
-		else
-		{
-			ResetStorageImpl(owner, init_default);
-		}
-	}
 
 
 	PlayerStorage& PlayerStorage::_singleton = TOME::SerialManager::CreateSerializer<PlayerStorage, PrimaryRecordType::PlayerStorage>();

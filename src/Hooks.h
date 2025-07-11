@@ -980,7 +980,7 @@ namespace AVG
 
 				
 
-				auto& skill_data = storage->GetSkillData(info->GetDataID());
+				auto& skill_data = *storage->GetSkillData(info->GetDataID());
 
 				float increase;
 				if (use_skill_mult) {
@@ -1163,7 +1163,7 @@ namespace AVG
 
 
 
-			auto& skill_data = storage->GetSkillData(info->GetDataID());
+			auto& skill_data = *storage->GetSkillData(info->GetDataID());
 
 			float mult = 0.0f;
 					
