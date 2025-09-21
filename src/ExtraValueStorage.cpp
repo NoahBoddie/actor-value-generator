@@ -9,14 +9,15 @@ namespace AVG
 
 	ExtraValueStorage::ExtraValueStorage(RE::Actor* actor, bool create_default)
 	{
-		initialized = true;
 		ResetStorageImpl(actor, create_default);
+		initialized = true;
+
 		//*/
 		//This is gonna need a neat organized list of info to perform h
 	}
 
 
-	ExtraValueStorage* ExtraValueStorage::GetStorage(RE::Actor* actor)
+	StorageView ExtraValueStorage::GetStorage(RE::Actor* actor)
 	{
 		//This won't be used often, but it's used in situations where it would be ok to not create storage yet.
 		if (!actor) {
@@ -28,16 +29,26 @@ namespace AVG
 			auto test = PlayerStorage::GetAsPlayable(false);
 			return test;
 		}
-			
-		ReadLock guard{ accessLock };
+		
+		//ReadLock guard{ accessLock };
+		StorageView view{ accessLock, true };
 
 		auto result = _valueTable.find(actor->formID);
 
-		return result == _valueTable.end() ? nullptr : &result->second;
+		ExtraValueStorage* storage = nullptr;
+		
+		if (_valueTable.end() != result && result->second.initialized) {
+			storage = &result->second;
+		}
+
+		view.SetStorage(storage);
+		
+		//return result == _valueTable.end() ? nullptr : &result->second;
+		return view;
 	}
 
 
-	ExtraValueStorage& ExtraValueStorage::ObtainStorage(RE::Actor* actor)
+	StorageView ExtraValueStorage::ObtainStorage(RE::Actor* actor)
 	{
 		//Should this be thead locked? I feel like this should be thread locked
 
@@ -51,7 +62,9 @@ namespace AVG
 			return *test;
 		}
 
-		WriteLock guard{ accessLock };
+
+		StorageView view{ accessLock, false };
+		//WriteLock guard{ accessLock };
 		
 		ExtraValueStorage& storage = _valueTable[actor->formID];
 		
@@ -59,7 +72,9 @@ namespace AVG
 			storage = ExtraValueStorage{ actor, false };
 		}
 
-		return storage;
+		view.SetStorage(storage);
+		//return storage;
+		return view;
 	}
 
 
@@ -96,6 +111,12 @@ namespace AVG
 		if (!actor)
 			return;
 
+		WriteLock guard;
+
+		if (initialized) {
+			guard = WriteLock{ accessLock };
+		}
+
 		//if deserializing, we won't really do anything, just create it.
 
 		auto size = ExtraValueInfo::GetCountUpto(actor->IsPlayerRef() ? ExtraValueType::Exclusive : ExtraValueType::Adaptive);
@@ -104,9 +125,12 @@ namespace AVG
 			return;  //print error, probbably crash
 		}
 		
-		_valueData = std::vector<ExtraValueData>(size, ExtraValueData());
+		//_valueData = std::vector<ExtraValueData>(size, ExtraValueData());
+		//_recoveryData = ExtraValueInfo::GetRecoverableValues(actor);
 
-		_recoveryData = ExtraValueInfo::GetRecoverableValues(actor);
+		_valueData.resize(size);
+		std::fill(_valueData.begin(), _valueData.end(), ExtraValueData{});
+		ExtraValueInfo::FillRecoverableValues(actor, _recoveryData);
 
 
 

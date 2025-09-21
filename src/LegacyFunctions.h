@@ -189,7 +189,7 @@ namespace AVG::Legacy
 			return 0;
 		}
 
-		RE::ActorValue av = singleton->LookupActorValueByName(av_name);
+		RE::ActorValue av = singleton->LookupActorValueByName(av_name.c_str());
 
 
 
@@ -204,7 +204,7 @@ namespace AVG::Legacy
 
 		if (av < RE::ActorValue::kTotal)
 		{
-			RE::ActorValueInfo* info = singleton->GetActorValue(av);
+			RE::ActorValueInfo* info = singleton->GetActorValueInfo(av);
 
 			if (!info) {
 				logger::error("Actor Value Info '{}' couldn't be found", av_name);

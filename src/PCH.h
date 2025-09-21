@@ -168,7 +168,7 @@ namespace util {
 
 
 
-#define RELOCATION_OFFSET(SE, AE, ...) REL::VariantOffset(SE, AE, SE).offset()
+#define RELOCATION_OFFSET(SE, AE, ...) (ptrdiff_t)REL::VariantOffset(SE, AE, SE).offset()
 
 //Move these eventually pls.
 inline LEX::IScript* commons = nullptr;

@@ -83,12 +83,16 @@ namespace AVG
 	///
 	float AdaptiveData::GetExtraValue(ExtraValueInfo* info, RE::Actor* target, ExtraValueInput value_types)
 	{
-		if (!target)
+		assert_if(!target)
 			return 0;//I'd like to return NaN, with some additional information.
 
-		ExtraValueStorage& ev_store = ExtraValueStorage::ObtainStorage(target);
+		StorageView storage = AllowSoftDefault() ? ExtraValueStorage::GetStorage(target) : ExtraValueStorage::ObtainStorage(target);
 
-		return ev_store.GetValue(target, info->GetDataID(), value_types, info);
+		if (!storage) {
+				return GetExtraValueDefault(target);
+		}
+
+		return storage->GetValue(target, info->GetDataID(), value_types, info);
 
 
 		//Needs to look up EVS, so this shit is just gonna wait for implementation.
@@ -96,10 +100,10 @@ namespace AVG
 
 	bool AdaptiveData::SetExtraValue(ExtraValueInfo* info, RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier)
 	{
-		if (!target)
+		assert_if(!target)
 			return false;
 
-		ExtraValueStorage& ev_store = ExtraValueStorage::ObtainStorage(target);
+		StorageView storage = ExtraValueStorage::ObtainStorage(target);
 
 		ExtraValueInput ev_mod = ExtraValueInput::None;
 
@@ -125,17 +129,19 @@ namespace AVG
 			return false;
 		}
 
-		ev_store.SetValue(target, info->GetDataID(), value, ev_mod, info);
-
+		auto pair = storage->SetValue(target, info->GetDataID(), value, ev_mod, info);
+		
+		info->SendOnActorValueChanged(target, nullptr, modifier, pair.first, pair.second);
+		
 		return true;
 	}
 
 	bool AdaptiveData::ModExtraValue(ExtraValueInfo* info, RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier)
 	{
-		if (!target)
+		assert_if(!target)
 			return false;
 
-		ExtraValueStorage& ev_store = ExtraValueStorage::ObtainStorage(target);
+		StorageView storage = ExtraValueStorage::ObtainStorage(target);
 
 		ExtraValueInput ev_mod = ExtraValueInput::None;
 
@@ -159,8 +165,10 @@ namespace AVG
 		default:
 			return false;
 		}
-
-		ev_store.ModValue(target, aggressor, info->GetDataID(), value, ev_mod, info);
+		
+		auto pair = storage->ModValue(target, aggressor, info->GetDataID(), value, ev_mod, info);
+		
+		info->SendOnActorValueChanged(target, aggressor, modifier, pair.first, pair.second);
 
 		return true;
 	}
@@ -263,7 +271,7 @@ namespace AVG
 
 			std::string update_formula = default_table["formula"].value_or("");
 
-			if (update_formula != "")
+			if (update_formula != "" && update_formula != "0")
 			{
 				auto* default_data = ObtainDefaultInfo();
 

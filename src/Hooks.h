@@ -224,11 +224,6 @@ namespace AVG
 			uint32_t raw_value = std::bit_cast<uint32_t>(av);
 
 
-			if (a_this->GetIsPlayerOwner() == true && std::bit_cast<uint32_t>(RE::ActorValue::kVariable01) == raw_value) {
-				int catcher = 4;
-				logger::debug("catcher {} and av {}", catcher, raw_value);
-			}
-
 			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(raw_value);
 
 
@@ -269,69 +264,24 @@ namespace AVG
 			func[1] = Character__Actor_VTable.write_vfunc(0x04, thunk<1>);
 
 			logger::info("SetBaseActorValueHook complete...");
-			
-
-			/*/
-			
-			auto hook_addr = REL::RelocationID(37520, 38465).address();//SE: 0x621070, AE: 0x6587C0, VR: ???
-			auto return_addr = hook_addr + RELOCATION_OFFSET(0x7, 0x9);
-			
-			
-			struct Code : Xbyak::CodeGenerator
-			{
-				//template <REL::Module::Runtime Runtime>
-				Code(uintptr_t ret_addr)
-				{
-					//Preserves these instructions, then jumps to the last functional instruction.
-					if (IsAE())
-					{
-						cmp(edx, 0x0FFFFFFFF);
-						jz("end");
-					}
-					else
-					{
-						sub(rsp, 0x38);
-						cmp(edx, 0x0FFFFFFFF);
-					}
-					
-					mov(rax, ret_addr);
-					jmp(rax);
-
-					L("end");
-					ret();
-
-				}
-			} static code{ return_addr };
-			
-			auto& trampoline = SKSE::GetTrampoline();
-
-			func[0] = (uintptr_t)code.getCode();
-
-			trampoline.write_branch<5>(hook_addr, thunk<0>);
-
-			logger::info("SetBaseActorValueHook complete...");
-			//*/
 		}
 
 		template<int I>
 		static void thunk(RE::ActorValueOwner* a_this, RE::ActorValue av, float value)
 		{
-			//logger::info("AVBS hook");
-
 			RE::Character* target = skyrim_cast<RE::Character*>(a_this);
 
 			uint32_t raw_value = std::bit_cast<uint32_t>(av);
 
 			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(raw_value);
 
-			if (info){//raw_value == 256) {
+			if (info){
 				logger::debug("hit set {}", raw_value);
 				info->SetExtraValue(target, value, RE::ACTOR_VALUE_MODIFIER::kTotal);
-				//Psuedo::SetExtraValue(target, "HitsTaken", value);
 			} else {
-				//logger::debug("pass set {}", raw_value);
-				//if (av != RE::ActorValue::kNone)
-					return func[I](a_this, av, value);
+				auto old_value = a_this->GetBaseActorValue(av);
+				func[I](a_this, av, value);
+				ExtraValueInfo::SendOnActorValueChanged(target, nullptr, av, RE::ActorValueModifier::kTotal, old_value, value);
 			}
 		}
 
@@ -406,7 +356,9 @@ namespace AVG
 				//Psuedo::ModExtraValue(a_this, "HitsTaken", a4, a2);
 			} else {
 				//logger::debug("pass mod {}, {}, val {}, who {}", raw_value, (int32_t)a2, a4, !actor ? "none" : actor->GetName());
-				return func(a_this, a2, a3, a4, actor);
+				auto old_value = a_this->GetActorValueModifier(a2, a3);
+				func(a_this, a2, a3, a4, actor);
+				ExtraValueInfo::SendOnActorValueChanged(a_this, nullptr, a3, a2, old_value, old_value + a4);
 			}
 		}
 
@@ -643,76 +595,129 @@ namespace AVG
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
 
-	//Deprecated
-	struct ActorUpdateHook
+	struct GetActorValueScriptNameFromIDHook
 	{
-		//I hate this method of putting stuff on the main thread like this
-		//If I can, I'd rather hook the update function for avs, or whatever calls that.
-		static void Patch()
+		static void Install()
 		{
-			//REL::Relocation<uintptr_t> Character__Actor_VTable{ RE::VTABLE_Character[0] };
-			REL::Relocation<uintptr_t> PlayerCharacter__Actor_VTable{ RE::VTABLE_PlayerCharacter[0] };
+			//SE: 3E1230, AE: 3FC360, VR: ???
+			auto hook = REL::RelocationID(26563, 27195).address();
+			uintptr_t offset = 0x6;
 
-			//func[0] = Character__Actor_VTable.write_vfunc(0xAD, thunk<0>);
-			func[1] = PlayerCharacter__Actor_VTable.write_vfunc(0xAD, thunk<1>);
 
-			logger::info("ActorUpdate Hook complete...");
-		}
-		static void Do()
-		{
-			//BSKeyboardDevice::Keys::kE
-			auto device = RE::BSInputDeviceManager::GetSingleton()->devices[RE::INPUT_DEVICES::kKeyboard];
-
-			if (device)
+			struct Patch : Xbyak::CodeGenerator
 			{
-				auto keyboard = skyrim_cast<RE::BSWin32KeyboardDevice*>(device);
-
-				if (keyboard)
+				explicit Patch(uintptr_t address, uintptr_t length)
 				{
-					auto it = keyboard->deviceButtons.find(RE::BSKeyboardDevice::Keys::kE);
+					// Hook returns here. Execute the restored bytes and jump back to the original function.
+					for (size_t i = 0; i < length; i++)
+						db(*reinterpret_cast<uint8_t*>(address + i));
 
-					if (it != keyboard->deviceButtons.end())
-					{
-						it->second->heldDownSecs = 0;
-					}
+					jmp(ptr[rip]);
+					dq(address + length);
 				}
-			}
+			} static code{ hook, offset };
+
+
+
+			auto& trampoline = SKSE::GetTrampoline();
+
+			//func = (uintptr_t)code.getCode();
+
+			//trampoline.write_branch<5>(hook_addr, thunk);
+
+			//return;
+
+			auto placed_call = IsCallOrJump(hook) > 0;
+
+			auto place_query = trampoline.write_branch<5>(hook, (uintptr_t)thunk);
+
+			if (!placed_call)
+				func = (uintptr_t)code.getCode();
+			else
+				func = place_query;
+
+
+			logger::info("GetActorValueScriptNameFromIDHook complete...");
+			//*/
 		}
-		
-		//The main purpose of this function shouldn't be to to update directly, I was thinking it should be to update states primarily?
-		template <unsigned int I = 0>
-		//static void thunk(RE::Character* a_this, float a2)
-		static void thunk(std::conditional_t<I == 0, RE::Character*, RE::PlayerCharacter*> a_this, float a2)
+		static const char* thunk(RE::ActorValue av)
 		{
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByAV(av);
 
-			Do();
-
-			return func[I](a_this, a2);
-			
-
-			if (a2 == 0)
-				a2 = Utility::GetDeltaTime();
-
-			//A question remains if I would like to handle this by recording the last time it was updated, instead of just respecting
-			// delta times alone. I'll decide later.
-
-			//Note, this is not how this shit would be going down.
-			
-			//This would never create, if it doesn't exist, no damage can exist.
-			ExtraValueStorage* value_storage = ExtraValueStorage::GetStorage(a_this);
-
-			if (!value_storage) {
-				//if (a_this->IsPlayerRef())
-				//	logger::debug("A {}", value_storage != nullptr);
-				
-				return;
+			if (info) {
+				return info->GetCName();
 			}
-		
-			value_storage->Update(a_this, a2);
+			else {
+				return func(av);
+			}
 		}
 
-		static inline REL::Relocation<decltype(thunk<0>)> func[2];
+		static inline REL::Relocation<decltype(thunk)> func;
 	};
+
+
+
+	struct GetActorValueNameFromIDHook
+	{
+		static void Install()
+		{
+			//SE: 3E1130, AE: 3FC250, VR: ???
+			auto hook = REL::RelocationID(26561, 27192).address();
+			uintptr_t offset = 0x6;
+
+
+			struct Patch : Xbyak::CodeGenerator
+			{
+				explicit Patch(uintptr_t address, uintptr_t length)
+				{
+					// Hook returns here. Execute the restored bytes and jump back to the original function.
+					for (size_t i = 0; i < length; i++)
+						db(*reinterpret_cast<uint8_t*>(address + i));
+
+					jmp(ptr[rip]);
+					dq(address + length);
+				}
+			} static code{ hook, offset };
+
+
+
+			auto& trampoline = SKSE::GetTrampoline();
+
+			//func = (uintptr_t)code.getCode();
+
+			//trampoline.write_branch<5>(hook_addr, thunk);
+
+			//return;
+
+			auto placed_call = IsCallOrJump(hook) > 0;
+
+			auto place_query = trampoline.write_branch<5>(hook, (uintptr_t)thunk);
+
+			if (!placed_call)
+				func = (uintptr_t)code.getCode();
+			else
+				func = place_query;
+
+
+			logger::info("GetActorValueNameFromIDHook complete...");
+			//*/
+		}
+		static const char* thunk(RE::ActorValue av)
+		{
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByAV(av);
+
+			if (info) {
+				return info->GetCDisplayName();
+			}
+			else {
+				return func(av);
+			}
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
+
+
 
 
 	struct RecalculateLeveledActorHook
@@ -781,6 +786,7 @@ namespace AVG
 			// this, that one can include in their settings. That way, even if one mod REALLY needs them to be loaded before any kind of interaction, 
 			// I can get it. 
 			//But for now, this.
+
 			ExtraValueStorage* value_storage = ExtraValueStorage::GetStorage(a_this);
 
 			if (value_storage) {
@@ -1395,6 +1401,7 @@ namespace AVG
 
 				FormExtraValueHandler::AddUnrepresentedForm(a_this);
 
+
 				return result;
 			}
 			
@@ -1405,6 +1412,60 @@ namespace AVG
 	};
 	
 
+
+
+	template <class... Ts>
+	struct Changable_InitAfterAllFileHook
+	{
+		using Forms = std::tuple<Ts...>;
+		
+
+		template <size_t I>
+		static void NthInstall()
+		{
+
+			using Form = std::tuple_element<I, Forms>::type;
+			
+			REL::Relocation<uintptr_t> FormType__TESForm_VTable = REL::Relocation<uintptr_t>{ Form::VTABLE[0] };
+
+			//func[I] = FormType__TESForm_VTable.write_vfunc(0x06, thunk<I>);
+			std::get<I>(func) = FormType__TESForm_VTable.write_vfunc(0x13, thunk<Form, I>);
+
+			logger::info("Created Nth patch for {} at {}", typeid(Form).name(), I);
+
+			if constexpr (I > 0)
+				NthInstall<I - 1>();
+		}
+
+
+		
+		static void Install()
+		{
+			NthInstall<sizeof...(Ts) - 1>();
+		}
+		
+
+		template<class Form, size_t I>
+		static void thunk(Form* a_this)
+		{
+			std::get<I>(func)(a_this);
+
+
+			//I really wish I didn't have to do this, but it seems there's no other sane option than to just do it again.
+			if (FormExtraValueHandler::Initialized() == true) {
+				//My hand has been pushed. I will resolve this shit later.
+				FormExtraValueHandler::ProcessForm(a_this);
+			}
+
+			
+		}
+		
+		//If I can, find some way to simpli
+		static inline std::tuple<REL::Relocation<decltype(thunk<Ts, 0>)>...> func;
+	};
+	
+	/*
+	//Old version, waiting to see if the new one actually works first
 	struct Changable_InitAfterAllFileHook
 	{
 		static void Install()
@@ -1435,7 +1496,7 @@ namespace AVG
 		//If I can, find some way to simpli
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
-
+	//*/
 
 	//I think I should use this inste
 	template <class... PatchTypes> requires(sizeof...(PatchTypes) > 0)
@@ -1519,7 +1580,7 @@ namespace AVG
 		{
 			
 			//SE: 0x89A7F0, AE: 0x8DD700, VR: ???
-			REL::Relocation<uintptr_t> hook{ REL::RelocationID{51143, 52023}, REL::VariantOffset{0x67, 0x50, 0x67} };
+			REL::Relocation<uintptr_t> hook{ REL::RelocationID{51143, 52023}, REL::VariantOffset{0x67, 0x6B, 0x67} };
 
 			auto& tramp = SKSE::GetTrampoline();
 
@@ -1679,7 +1740,7 @@ namespace AVG
 
 			
 			//SE: 0x86C640, AE: 0x8ACCF0, VR:???
-			REL::Relocation<std::uintptr_t>CraftEnch__Enchant{ REL::RelocationID{ 50450, 51355 }, se ? 0x256 : 0x254 };
+			REL::Relocation<std::uintptr_t>CraftEnch__Enchant{ REL::RelocationID{ 50450, 51355 }, RELOCATION_OFFSET(0x256, 0x254) };
 			
 			//SE: 0x86D830, AE: 0x8AE270, VR:???
 			REL::Relocation<std::uintptr_t>CraftEnch__Disenchant{ REL::RelocationID{ 50459, 51363 }, 0xA4 };
@@ -2335,7 +2396,7 @@ namespace AVG
 
 				const RE::ActorValue actorValue = a_this.GetRuntimeData().skillTrees[i / 5];
 				if ((int)actorValue - 6 > 0x11) {
-					auto info = RE::ActorValueList::GetSingleton()->GetActorValue(actorValue);
+					auto info = RE::ActorValueList::GetSingleton()->GetActorValueInfo(actorValue);
 
 					level.SetNumber(static_cast<std::uint32_t>(69));
 					
@@ -2358,7 +2419,7 @@ namespace AVG
 					//name.SetString(Game::GetActorValueName(actorValue));
 					//color.SetString(Game::GetActorValueColor(actorValue));
 
-					auto info = RE::ActorValueList::GetSingleton()->GetActorValue(actorValue);
+					auto info = RE::ActorValueList::GetSingleton()->GetActorValueInfo(actorValue);
 
 					name.SetString(info->GetFullName());
 					color.SetString("#FFFFFF");
@@ -2471,7 +2532,7 @@ namespace AVG
 			//Gets killed in second one, figure it out.
 			//-end
 
-			//ActorUpdateHook::Patch();
+
 			ActorValueUpdateHook::Patch();
 			RecalculateLeveledActorHook::Patch();
 
@@ -2481,7 +2542,8 @@ namespace AVG
 			GetBaseActorValueHook::Patch();
 			GetActorValueModifierHook::Patch();
 			GetActorValueIDFromNameHook::Patch();
-
+			GetActorValueNameFromIDHook::Install();
+			GetActorValueScriptNameFromIDHook::Install();
 			//V2
 			MagicItemCtorHook::Patch();
 			GetActorValueForCostHook::Patch();
@@ -2497,7 +2559,7 @@ namespace AVG
 			SkillCheckPatch::Patch();
 
 			InitValuesHook::Patch();
-			Changable_InitAfterAllFileHook::Install();
+			Changable_InitAfterAllFileHook<RE::TESObjectBOOK, RE::TESTopicInfo>::Install();
 			ReadFromFileStreamHook<RE::TESIdleForm, RE::BGSCameraPath, RE::TESTopicInfo>::Patch();
 
 

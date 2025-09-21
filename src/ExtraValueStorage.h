@@ -114,55 +114,73 @@ namespace AVG
 
 
 		//This should likely not use These modifiers btw. Would be easier on me.
-		void SetValue(float value, ExtraValueInput modifier = ExtraValueInput::Base)
+		duo<float> SetValue(float value, ExtraValueInput modifier = ExtraValueInput::Base)
 		{
 			std::lock_guard<std::mutex> behaviour_guard(av_lock);
-
+			float old = 0;
 			switch (modifier)
 			{
 			case ExtraValueInput::Base:
+				old = _base;
 				_base = value;
+
 				break;
 
 			case ExtraValueInput::Permanent:
+				old = _prmMod;
 				_prmMod = value;
 				break;
 
 			case ExtraValueInput::Temporary:
+				old = _tmpMod;
 				_tmpMod = value;
 				break;
 
 			case ExtraValueInput::Damage:
+				old = _dmgMod;
 				_dmgMod = value;
 				break;
 			default:
 				logger::error("Modifier {} id isn't valid", modifier);
 			}
+
+			return { old, value };
 		}
 
-		void ModValue(float value, ExtraValueInput modifier = ExtraValueInput::Base)
+		duo<float> ModValue(float value, ExtraValueInput modifier = ExtraValueInput::Base)
 		{
 			std::lock_guard<std::mutex> behaviour_guard(av_lock);
+			float before;
+			float after;
 
 			switch (modifier) {
 			case ExtraValueInput::Base:
-				_base += value;
+				before = _base;
+				after = _base += value;
 				break;
 
 			case ExtraValueInput::Permanent:
-				_prmMod += value;
+				before = _prmMod;
+				after = _prmMod += value;
 				break;
 
 			case ExtraValueInput::Temporary:
-				_tmpMod += value;
+				before = _tmpMod;
+				after = _tmpMod += value;
 				break;
 
 			case ExtraValueInput::Damage:
-				//This would need a setting to allow overcharge maybe?
-				_dmgMod = fmin(_dmgMod + value, 0);
-				//_dmgMod += value;
-				//logger::info("modifying damage by {} to {}", value, GetValue());
+				before = _dmgMod;
+				after = _dmgMod = fmin(_dmgMod + value, 0);
+				break;
+			default:
+				logger::error("Modifier {} id isn't valid", magic_enum::enum_name(modifier));
+				return {};
+
 			}
+			
+			return { before, after };
+			
 		}
 
 		bool operator==(ExtraValueData& a_rhs) 
@@ -186,6 +204,7 @@ namespace AVG
 		using ReadLock = std::shared_lock<Mutex>;
 		using WriteLock = std::unique_lock<Mutex>;
 
+
 		//using Mutex = std::mutex;
 		//using ReadLock = std::lock_guard<Mutex>;
 		//using WriteLock = std::lock_guard<Mutex>;
@@ -196,7 +215,73 @@ namespace AVG
 
 
 	public:
-		
+
+		struct StorageView
+		{
+			StorageView() = default;
+			StorageView(ExtraValueStorage* ptr) : storage{ ptr } {}
+			StorageView(ExtraValueStorage& ref) : StorageView{ &ref } {}
+
+			StorageView(Mutex& mtx, bool readOnly) 
+			{
+				if (readOnly)
+					ReadLockAccess(mtx);
+				else
+					WriteLockAccess(mtx);
+			}
+
+
+			ExtraValueStorage* storage = nullptr;
+			std::variant<std::monostate, WriteLock, ReadLock> lock;
+
+			operator ExtraValueStorage* () { return storage; }
+			operator bool () const noexcept { return storage; }
+
+			ExtraValueStorage* operator->() { assert(storage); return storage; }
+
+
+			ExtraValueStorage& operator*() { assert(storage); return *storage; }
+
+
+			void ReadLockAccess(Mutex& mtx)
+			{
+				if (lock.index() == 0)
+				{
+					lock = WriteLock{ mtx };
+				}
+			}
+
+			void WriteLockAccess(Mutex& mtx)
+			{
+				if (lock.index() == 0)
+				{
+					lock = WriteLock{ mtx };
+				}
+			}
+
+			void SetStorage(ExtraValueStorage* ptr)
+			{
+				storage = ptr;
+				if (!ptr)//if no value is found this has no reason to maintain a lock
+				{
+					switch (lock.index())
+					{
+					case 1:
+						std::get<1>(lock).unlock();
+						break;
+					case 2:
+						std::get<2>(lock).unlock();
+						break;
+					}
+				}
+			}
+
+			void SetStorage(ExtraValueStorage& ref)
+			{
+				return SetStorage(&ref);
+			}
+		};
+
 
 		virtual void Serialize(TOME::SerialBuffer& buffer, bool& result)
 		{
@@ -374,10 +459,6 @@ namespace AVG
 
 		static std::map<RE::FormID, ExtraValueStorage>& _valueTable;
 
-		void BIGTEST()
-		{
-			constexpr bool test = TOME::is_serial_wrapper_v<SerialMapClass2>;
-		}
 
 	//static
 	private:
@@ -402,10 +483,10 @@ namespace AVG
 			return ResetStorageImpl(actor, init_default);
 		}
 
-		static ExtraValueStorage* GetStorage(RE::Actor* actor);
+		static StorageView GetStorage(RE::Actor* actor);
 
 		
-		static ExtraValueStorage& ObtainStorage(RE::Actor* actor);
+		static StorageView ObtainStorage(RE::Actor* actor);
 
 
 		static bool RemoveStorage(RE::FormID _id);
@@ -487,8 +568,11 @@ namespace AVG
 		//Make versions of these that accept the other modifier set up too.
 		float GetValue(RE::Actor* owner, DataID id, ExtraValueInput modifiers = ExtraValueInput::All, ExtraValueInfo* info = nullptr)
 		{
+			if (_valueData.size() <= id) {
+				logger::critical("id given was larger than valueData's size. id: {}, size: {}, initialized: {}", id, _valueData.size(), initialized);
+			}
 			//Here, if info is loaded an update will be performed if it's on constant update.
-			duo<float> result = _valueData[id].GetValue(modifiers);
+			duo<float> result = _valueData.at(id).GetValue(modifiers);
 			
 			if (isnan(result.first) == true) {
 				info = info ? info : ExtraValueInfo::GetValueInfoByData(id);
@@ -498,7 +582,7 @@ namespace AVG
 			return result.first + result.second;
 		}
 
-		void SetValue(RE::Actor* owner, DataID id, float value, ExtraValueInput modifier = ExtraValueInput::Base, ExtraValueInfo* info = nullptr)
+		duo<float> SetValue(RE::Actor* owner, DataID id, float value, ExtraValueInput modifier = ExtraValueInput::Base, ExtraValueInfo* info = nullptr)
 		{ 
 			//If flag is constant, then it will need to check if its actually allowed to set that.
 
@@ -510,16 +594,18 @@ namespace AVG
 				if (default_data && default_data->_type == DefaultInfo::Constant) {
 					//Cant set the base of default data.
 					logger::warn("Cannot set the base value of constant Extra Value '{}'.", info->GetName());
-					return;
+					value = _valueData[id].GetValueUnsafe(modifier);
+					return { value, value };
 				}
 			}
 
+			return _valueData[id].SetValue(value, modifier); 
 
-			_valueData[id].SetValue(value, modifier); 
+
 		}
 
 		//Add in the accuser, no idea if that might come in handly
-		void ModValue(RE::Actor* owner, RE::Actor* aggressor, DataID id, float value, ExtraValueInput modifier = ExtraValueInput::Base, ExtraValueInfo* info = nullptr)
+		duo<float> ModValue(RE::Actor* owner, RE::Actor* aggressor, DataID id, float value, ExtraValueInput modifier = ExtraValueInput::Base, ExtraValueInfo* info = nullptr)
 		{
 			//If used with info, it will attempt to update the recovery data.
 			//No info should actually mean something, meaning don't run needed stuff.
@@ -531,7 +617,8 @@ namespace AVG
 
 				if (default_data && default_data->_type == DefaultInfo::Constant) {
 					//Cant set the base of default data.
-					return;
+					value = _valueData[id].GetValueUnsafe(modifier);
+					return { value, value };
 				}
 			}
 
@@ -540,9 +627,9 @@ namespace AVG
 				UpdateDelay(owner, id, info); 
 			
 			
-			_valueData[id].ModValue(value, modifier); 
+			return _valueData[id].ModValue(value, modifier); 
 
-			return;
+			
 			float current = GetValue(owner, id, ExtraValueInput::All, info);
 			float damage = modifier == ExtraValueInput::Damage ?  _valueData[id].GetValueUnsafe(ExtraValueInput::Damage) : 0;
 			//float damage =  _valueData[id].GetValue(ExtraValueInput::Damage);
@@ -550,7 +637,7 @@ namespace AVG
 			_valueData[id].ModValue(value, modifier); 
 			
 
-			return;
+			return {};
 			if (current > 0 && current + value <= 0){
 				SendEvent("OnActorValueDepleted", owner, info->GetFixedName(), aggressor);
 			}
@@ -634,8 +721,11 @@ namespace AVG
 
 
 
-			_valueData[entry.first].ModValue(mod_value, ExtraValueInput::Damage);
-			
+			auto out = _valueData[entry.first].ModValue(mod_value, ExtraValueInput::Damage);
+			if (out.first != out.second) {
+				info->SendOnActorValueChanged(owner, nullptr, RE::ActorValueModifier::kDamage, out.first, out.second);
+				//SendEvent("OnActorValueRestored", owner, info->GetFixedName(), owner);
+			}
 			//This actually triggers
 			//if (damage < 0 && damage + mod_value >= 0) {
 			//	SendEvent("OnActorValueRestored", owner, info->GetFixedName(), owner);
@@ -862,10 +952,9 @@ namespace AVG
 
 			auto* player = RE::PlayerCharacter::GetSingleton();
 
-			auto& skill_map = _skillMap;
-
-
-			skill_map = ExtraValueInfo::GetSkillfulValues(player);
+			//auto& skill_map = _skillMap;
+			//skill_map = ExtraValueInfo::GetSkillfulValues(player);
+			ExtraValueInfo::FillSkillfulValues(player, _skillMap);
 
 			if (init_default)
 				_playable = true;
@@ -904,4 +993,7 @@ namespace AVG
 			ResetStorageImpl(use_default);
 		}
 	};
+
+
+	using StorageView = ExtraValueStorage::StorageView;
 }

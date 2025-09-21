@@ -6,7 +6,7 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ########################################################################################################################
 project(
         ActorValueGenerator
-        VERSION 2.0.0.7
+        VERSION 2.2.2.3
         DESCRIPTION "An SKSE modding tool that enables users to make new actor values as well as extending their existing functionally."
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
@@ -95,6 +95,7 @@ message("\tTests: ${BUILD_TESTS}")
 ########################################################################################################################
 ## Configure target DLL
 ########################################################################################################################
+find_package(directxtk CONFIG REQUIRED)
 find_package(CommonLibSSE CONFIG REQUIRED)
 
 add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${headers} ${sources})

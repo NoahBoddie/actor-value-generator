@@ -128,6 +128,19 @@ namespace AVG
 		//If value to update is zero, no timed update data will be used, and instead it will only update upon load.
 		ValueFormula defaultFunction;
         
+
+		bool AllowSoftDefault() const
+		{
+			return _type != Type::Implicit;
+		}
+
+		float GetDefault(RE::Actor* target)
+		{
+			if (!this)
+				return 0;
+
+			return defaultFunction(target)->Call();
+		}
     };
 
 
@@ -208,6 +221,10 @@ namespace AVG
 
 	public:
 
+
+
+
+
 		static void HandleSerialize(TOME::SerialBuffer& buffer, bool& result, ExtraValueInfo*& info)
 		{
 			constexpr std::string_view invalid = "INVALID";
@@ -233,17 +250,6 @@ namespace AVG
 			}
 		}
 
-		
-
-		TOME::SerialCallback& _serialCallback =
-			TOME::SerialManager::CreateSerializer<TOME::SerialCallback, PrimaryRecordType::ExtraValueInfo>([](TOME::SerialBuffer& buffer, bool& success)
-				{
-					bool is_saving = buffer.IsSaving();
-
-					buffer.Serialize(is_saving ? _endTypeIndex[0] : _prevEndTypeIndex[0]);
-					buffer.Serialize(is_saving ? _endTypeIndex[1] : _prevEndTypeIndex[1]);
-					buffer.Serialize(is_saving ? _extraValueList : _previousExtraValueList);
-				});
 		
 
 
@@ -285,6 +291,14 @@ namespace AVG
 		static inline DataID _prevEndTypeIndex[ExtraValueType::Functional];
         //I would like to give this a rule in that it can only deserialize non-functional values. The same should go on other vector.
         static inline std::vector<ExtraValueInfo*> _previousExtraValueList;
+		static inline std::vector<ActorValueChange> onAVChangeList;
+			//= { [](ACTOR_VALUE_CHANGE_PARAMS)->void {} };
+
+
+
+
+
+
 
         // Should require validation. This is also the manifest now. When serialized, we just serialize the strings in
         // sequence.
@@ -321,8 +335,51 @@ namespace AVG
 
 		static inline std::vector<ExtraValueInfo*> _extraValueList;
 
+		inline static TOME::SerialCallback& _serialCallback =
+			TOME::SerialManager::CreateSerializer<TOME::SerialCallback, PrimaryRecordType::ExtraValueInfo>([](TOME::SerialBuffer& buffer, bool& success)
+				{
+					bool is_saving = buffer.IsSaving();
+
+					buffer.Serialize(is_saving ? _endTypeIndex[0] : _prevEndTypeIndex[0]);
+					buffer.Serialize(is_saving ? _endTypeIndex[1] : _prevEndTypeIndex[1]);
+					buffer.Serialize(is_saving ? _extraValueList : _previousExtraValueList);
+				});
+
 
     public:
+		
+		static void AddOnActorValueChanged(ActorValueChange func)
+		{
+			if (func)
+				onAVChangeList.push_back(func);
+		}
+
+		static void SendOnActorValueChanged(RE::Actor* target, RE::Actor* cause, RE::ActorValue av, RE::ActorValueModifier modifier, float old_value, float new_value)
+		{
+			if (old_value == new_value)
+				return;
+
+			static std::shared_mutex mutex;
+			
+			static void* current_func = nullptr;
+
+			std::unique_lock lock{ mutex };
+
+			for (auto func : onAVChangeList)
+			{
+				if (func && current_func != func) {
+					origin_value old_func = current_func;
+					current_func = func;
+					func(target, cause, av, modifier, old_value, new_value);
+				}
+			}
+		}
+
+		void SendOnActorValueChanged(RE::Actor* target, RE::Actor* cause, RE::ActorValueModifier modifier, float old_value, float new_value)
+		{
+			return SendOnActorValueChanged(target, cause, GetValueIDAsAV(), modifier, old_value, new_value);
+		}
+
 
 
 		static ExtraValueInfo* GetValueInfoByName(std::string name)
@@ -381,7 +438,27 @@ namespace AVG
 
 
 
+		static void FillRecoverableValues(RE::Actor* actor, std::vector<std::pair<DataID, RegenData>>& out)
+		{
+
+			auto size = actor->IsPlayerRef() ? _recoverValueList.size() : _exclusiveRecoverIndex;
+
+			out.resize(size);
+
+			auto it = _recoverValueList.begin();
+
+			//Wondering if I could just use it.
+			std::transform(out.begin(), out.end(), out.begin(), [&](auto pair) { auto i = it++; return std::make_pair(*i, RegenData()); });
+		}
+
 		static std::vector<std::pair<DataID, RegenData>> GetRecoverableValues(RE::Actor* actor)
+		{
+			std::vector<std::pair<DataID, RegenData>> result;
+			FillRecoverableValues(actor, result);
+			return result;
+		}
+
+		static std::vector<std::pair<DataID, RegenData>> GetRecoverableValues2(RE::Actor* actor)
 		{
 			auto size = actor->IsPlayerRef() ? _recoverValueList.size() : _exclusiveRecoverIndex;
 
@@ -394,6 +471,17 @@ namespace AVG
 			return result;
 		}
 
+
+
+		static void FillSkillfulValues(RE::PlayerCharacter* player, std::vector<std::pair<DataID, SkillData>>& out)
+		{
+			out.resize(_skillValueList.size());
+
+			auto it = _skillValueList.begin();
+
+			//I think I can actually use transform somewhere in here but idfk I wanna be done with this.
+			std::transform(out.begin(), out.end(), out.begin(), [&](auto pair) { auto i = it++; return std::make_pair(*i, SkillData()); });
+		}
 
 		static std::vector<std::pair<DataID, SkillData>> GetSkillfulValues(RE::PlayerCharacter* player)
 		{
@@ -579,6 +667,7 @@ namespace AVG
 		std::string_view	GetName() { return valueName; }
 		const char*			GetCName() { return valueName.c_str(); }
 		std::string_view	GetDisplayName() { return displayName.empty() ? GetName() : displayName; }
+		const char*			GetCDisplayName() { return GetDisplayName().data(); }
 
 
 		RE::BSFixedString	GetFixedName() { return RE::BSFixedString(valueName.c_str()); }
@@ -726,9 +815,6 @@ namespace AVG
 			return GetExtraValue(target, input);
 		}
 
-        //Not implementing for now, it's effectively set.
-		bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, RE::ACTOR_VALUE_MODIFIER modifier, float value) { return false; }
-        
         
     };
 
@@ -819,6 +905,16 @@ namespace AVG
 
 			return GetDefaultInfo();
 		}
+
+		bool AllowSoftDefault() const
+		{
+			
+			if (_default)
+				return _default->AllowSoftDefault();
+
+			return true;
+		}
+
 		RecoverInfo* FetchRecoverInfo() { if (!this) return nullptr; return GetRecoverInfo(); }
 
 
@@ -931,27 +1027,41 @@ namespace AVG
 			return bas + prm + tmp + dmg;
 		}
 
-		bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier)
+		bool SetExtraValue(ExtraValueInfo* info, RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier)
 		{
 			if (!_set[modifier])
 				return false;
 
 			//float from = GetExtraValue(target, ModifierToValueInput(modifier));
 			float from = modifier == RE::ActorValueModifier::kTotal ? NAN : 0;
+			
 			_set[modifier](target)->Call(nullptr, from, value);
 
+
+			//I'm not sure why I changed from here, I guess cause it didn't matter much
+			info->SendOnActorValueChanged(target, nullptr, modifier, from, value);
+			
 			return true;
 		}
 
-		bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier)
+		bool ModExtraValue(ExtraValueInfo* info, RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier)
 		{
 
 			if (!_set[modifier])
 				return false;
 
-			float current = GetExtraValue(target, ModifierToValueInput(modifier));
+			if (value != 0)
+			{
 
-			_set[modifier](target)->Call(aggressor, current, value + current);
+				float current = GetExtraValue(target, ModifierToValueInput(modifier));
+
+				_set[modifier](target)->Call(aggressor, current, value + current);
+
+				//float new_value = GetExtraValue(target, ModifierToValueInput(modifier));
+				//Functional is loose, so if it mods or sets I'll just always do it.
+
+				info->SendOnActorValueChanged(target, aggressor, modifier, current, value + current);
+			}
 
 			return true;
 		}
@@ -1019,12 +1129,12 @@ namespace AVG
 
 		bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
 		{
-			return function()->SetExtraValue(target, value, modifier);
+			return function()->SetExtraValue(this, target, value, modifier);
         }
 
 		bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
 		{
-			return function()->ModExtraValue(target, aggressor, value, modifier);
+			return function()->ModExtraValue(this, target, aggressor, value, modifier);
 		}
 
 
@@ -1082,7 +1192,7 @@ namespace AVG
 			if (target && target->IsPlayerRef() == true)
 				return adapt()->SetExtraValue(this, target, value, modifier);
 			else
-				return function()->SetExtraValue(target, value, modifier);
+				return function()->SetExtraValue(this, target, value, modifier);
 		}
 
 		virtual bool ModExtraValue(RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
@@ -1090,7 +1200,7 @@ namespace AVG
 			if (target && target->IsPlayerRef() == true)
 				return adapt()->ModExtraValue(this, target, aggressor, value, modifier);
 			else
-				return function()->ModExtraValue(target, aggressor, value, modifier);
+				return function()->ModExtraValue(this, target, aggressor, value, modifier);
 		}
 
 
@@ -1231,7 +1341,7 @@ namespace AVG
 			if (info)
 				return info->GetExtraValue(target, value_types);
 			
-			RE::ActorValue av = RE::ActorValueList::GetSingleton()->LookupActorValueByName(ev_name);
+			RE::ActorValue av = RE::ActorValueList::GetSingleton()->LookupActorValueByName(ev_name.c_str());
 
 			if (av == RE::ActorValue::kNone)
 				return NAN;

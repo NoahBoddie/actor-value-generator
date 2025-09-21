@@ -27,7 +27,12 @@ using namespace SKSE::stl;
 
 
 namespace {
-    void InitializeLogging() {
+	void InitializeLogging();
+
+
+    void InitializeLogging(){} INITIALIZE_NOW()
+	//void InitializeLogging() 
+	{
         auto path = log_directory();
         if (!path) {
             report_and_fail("Unable to lookup SKSE logs directory.");
@@ -43,7 +48,7 @@ namespace {
             log = std::make_shared<spdlog::logger>(
                 "Global", std::make_shared<spdlog::sinks::basic_file_sink_mt>(path->string(), true));
         }
-        
+		RE::ActorValueList;
         
 #ifndef NDEBUG
         const auto level = spdlog::level::trace;
@@ -340,7 +345,7 @@ namespace {
 		using LEX::LinkFlag;
 
 		//If I can, I'd like to make an initialize script based around this.
-		if (LEX::LinkMessenger::instance && !LEX::LinkMessenger::instance->RegisterForLink([](LinkFlag flag) {
+		if (!LEX::LinkMessenger::instance->RegisterForLink([](LinkFlag flag) {
 			InvokeOrExit([flag]()
 			{
 				switch (flag) {
@@ -424,6 +429,7 @@ namespace {
             switch (message->type) {
                 // Skyrim lifecycle events.
                 case MessagingInterface::kPostLoad: // Called after all plugins have finished running SKSEPlugin_Load.
+					LEX::InterfaceManager::ValidateVersion(false);
 					InitializeLexiconMessaging();
 					break;
 				
@@ -480,7 +486,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
 	
 
 
-    Init(skse);
+    Init(skse, false);
 	
     InitializeMessaging();
 	

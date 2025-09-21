@@ -114,7 +114,7 @@ namespace AVG
 
 		constexpr UnionValue() = default;
 
-		constexpr UnionValue(RE::ActorValue value) : _raw{ value == RE::ActorValue::kNone ? _raw = none : static_cast<uint8_t>(value) }
+		constexpr UnionValue(RE::ActorValue value) : _raw{ value == RE::ActorValue::kNone ? none : static_cast<uint8_t>(value) }
 		{
 			
 		}
@@ -550,6 +550,11 @@ namespace AVG
 
 		for (auto mask : masks)
 		{
+			if (value > (int)VirtualValue::kTotal) {
+				logger::warn("Stored Actor Value is already above total at  {}", (int)value);
+				return false;
+			}
+
 			if (globalMask[mask].test(value) == false) {
 				//logger::debug("Alias for {} not implementing.", (int)alias);
 				return false;

@@ -869,7 +869,7 @@ namespace RGL
 						//if (type_code != _processData.type && _processData.type != acceptAll) {
 						//I REALLY would like the regular operator to fucking work please.
 						if (!CheckTypeHash(target, _processData.type) && _processData.type.code != SerializingID::acceptAll.code) {
-							logger::error("Process typecode {:X} does not equal current type code {:X} for {}.", _processData.type, type_code, TypeName<Type>::value);
+							logger::error("Process typecode {:X} does not equal current type code {:X} for {}.", _processData.type.code, type_code.code, TypeName<Type>::value);
 							DumpDepth(original_depth);
 							return false;
 						}
@@ -980,7 +980,7 @@ namespace RGL
 					}
 					//NEW!
 					else if (!CheckTypeHash(target, _processData.type) && _processData.type.code != SerializingID::acceptAll.code) {
-						logger::error("Process typecode {:X} does not equal current type code {:X} for {}.", _processData.type, type_code, TypeName<Type>::value);
+						logger::error("Process typecode {:X} does not equal current type code {:X} for {}.", _processData.type.code, type_code.code, TypeName<Type>::value);
 						DumpDepth(_depth);
 						_serializableLock = original_lock;
 						return false;

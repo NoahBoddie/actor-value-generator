@@ -8,6 +8,8 @@ namespace AVG::API
 
 	struct ActorValueGeneratorInterface : public CurrentInterface
 	{
+		
+
 		Version GetVersion() override { return Version::Current; }
 
 
@@ -25,6 +27,12 @@ namespace AVG::API
 
 			return info->GetValueIDAsAV();
 		}
+
+		void RegisterForActorValueChange(ActorValueChange func)
+		{
+			ExtraValueInfo::AddOnActorValueChanged(func);
+		}
+
 	};
 
 
@@ -44,6 +52,9 @@ namespace AVG::API
 		case Version::Version1:
 			return dynamic_cast<InterfaceVersion1*>(result);
 
+
+		case Version::Version2:
+			return dynamic_cast<InterfaceVersion2*>(result);
 		}
 
 		return nullptr;

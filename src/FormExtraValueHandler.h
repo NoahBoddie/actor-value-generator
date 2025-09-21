@@ -115,16 +115,10 @@ namespace AVG
 				{
 					RE::ActorValue stored_av = static_cast<RE::ActorValue>(reinterpret_cast<uintptr_t>(function_data.params[0]));
 					
-
-					//if (log)
-					//	logger::debug("AV {} in info", stored_av._b);
-
-					
-					//if (stored_av._b > RE::ActorValue::kTotal || (int)stored_av._b < 0)
-					//	logger::debug("processing {} form type {}, with a value of {}", form->GetName(), (int)form->GetFormType(), (int)stored_av._b);
-
-					change_num += AliasToValue(form, stored_av, settings);
-					
+					if (AliasToValue(form, stored_av, settings) == true) {
+						function_data.params[0] = reinterpret_cast<void*>(stored_av);
+						change_num++;
+					}
 					
 					//if (reinterpret_cast<uintptr_t>(function_data.params[0]) == static_cast<uintptr_t>(RE::ActorValue::kVariable01)) {
 					//	function_data.params[0] = reinterpret_cast<void*>(new_av);
@@ -444,7 +438,7 @@ namespace AVG
 				static bool shown = false;
 
 				if (!shown)
-					logger::info("Processing for form type {} not found.", typeid(FormType).name());
+					logger::error("Processing for form type {} not found.", typeid(FormType).name());
 
 				shown = true;
 			}
@@ -594,7 +588,7 @@ namespace AVG
 
 		static void AddUnrepresentedForm(RE::TESForm* form)
 		{
-			if (!form)
+			if (!form || Initialized() == true)
 				return;
 
 			unrepresentedForms[*form->formType].emplace(form);
