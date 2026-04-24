@@ -1,72 +1,95 @@
-#pragma once
-
 #include "API_ActorValueGenerator.h"
 
 #include "ExtraValueInfo.h"
-#include "Arthmetic/ArthmeticUtility.h"
 
-namespace ActorValueGeneratorAPI
+
+namespace AVG::API
 {
-	using namespace AVG;
 
 	struct ActorValueGeneratorInterface : public CurrentInterface
 	{
+		
+
 		Version GetVersion() override { return Version::Current; }
 
 
-		void RegisterExportFunction(std::string_view name, ExportFunction func) override
+		RE::ActorValue ResolveExtraValue(RE::ActorValue av) override
 		{
-			//For now I don't really care about making this check for null.
-			logger::info("export function {} registered.", name);
-			exportMap[std::string(name)] = func;
-		}
+			if (av <= RE::ActorValue::kTotal || av == RE::ActorValue::kNone)
+				return av;
 
-		void CheckActorValue(RE::ActorValue& av, const char* c_str) override
-		{
-			if (av != RE::ActorValue::kNone && av != RE::ActorValue::kTotal)
-				return;
+			uint32_t id = (uint32_t)av - (uint32_t)RE::ActorValue::kTotal;
 
-			std::string str = c_str;
-
-			//I'd like to put a lock here.
-
-			av = Utility::StringToActorValue(str);
-
-			if (Utility::IsValidValue(av) == true)
-				return;
-
-			std::string av_name = std::string(str);
-
-			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByName(av_name);
-
-			if (!info) {
-				logger::error("Attempts to find Actor Value for '{}' have failed.", str);
-				av = RE::ActorValue::kTotal;
-				return;
-			}
-
-			av = static_cast<RE::ActorValue>(info->GetValueID());
-		}
-
-		void ResolveActorValue(RE::ActorValue& av)
-		{
-			auto info = ExtraValueInfo::GetValueInfoByManifest((uint32_t)av);
+			auto info = ExtraValueInfo::GetValueInfoByManifest(id);
 
 			if (!info)
-				return;
+				return RE::ActorValue::kNone;
 
-			av = info->GetValueIDAsAV();
+			return info->GetValueIDAsAV();
 		}
 
-		bool SetAVDelay(RE::Actor*, RE::ActorValue, float) override
+		void RegisterForActorValueChange(ActorValueChange func)
 		{
-			return false;
+			ExtraValueInfo::AddOnActorValueChanged(func);
 		}
+
+		DelegateResult RegisterAVDelegate(std::string_view name, GetAVDelegate get, SetAVDelegate set) override
+		{
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByName(name);
+
+			if (!info) {
+				return DelegateResult::Nonexistent;
+			}
+
+			FunctionalData* data;
+			switch (info->GetType())
+			{
+			case ExtraValueType::Functional:
+				data = static_cast<FunctionalValueInfo*>(info)->function();
+				break;
+			case ExtraValueType::Exclusive:
+				data = static_cast<ExclusiveValueInfo*>(info)->function();
+				break;
+
+			default:
+				return DelegateResult::Nonfunctional;
+			}
+
+			if (data->IsDelegate() == false) {
+				return DelegateResult::Nondelegate;
+			}
+
+			auto& delegate = data->ObtainDelegate(info);
+
+			if (delegate.get || delegate.set) {
+				return DelegateResult::AlreadyFilled;
+			}
+
+			delegate.get = get;
+			delegate.set = set;
+
+			return DelegateResult::Success;
+		}
+
 	};
+
+
 
 	[[nodiscard]] CurrentInterface* InferfaceSingleton()
 	{
 		static ActorValueGeneratorInterface intfc{};
 		return &intfc;
 	}
+
+	extern "C" __declspec(dllexport) void* AVG_RequestInterfaceImpl(Version version)
+	{
+
+		CurrentInterface* result = InferfaceSingleton();
+
+		if (result && result->GetVersion() >= version)
+			return result;
+
+		return nullptr;
+	}
+
 }

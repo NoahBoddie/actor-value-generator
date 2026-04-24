@@ -1,5 +1,5 @@
 #pragma once
-
+//TODO: NEEDS DELETING
 
 #include <cmath>
 #include <stdarg.h>
@@ -81,13 +81,6 @@ namespace RGL
 
 
 
-	template<class T> inline constexpr T operator ~ (T a) { return (T)~(int)a; }
-	template<class T> inline constexpr T operator | (T a, T b) { return (T)((int)a | (int)b); }
-	template<class T> inline constexpr T operator & (T a, T b) { return (T)((int)a & (int)b); }
-	template<class T> inline constexpr T operator ^ (T a, T b) { return (T)((int)a ^ (int)b); }
-	template<class T> inline constexpr T& operator |= (T& a, T b) { return (T&)((int&)a |= (int)b); }
-	template<class T> inline constexpr T& operator  &= (T& a, T b) { return (T&)((int&)a &= (int)b); }
-	template<class T> inline constexpr T& operator^= (T& a, T b) { return (T&)((int&)a ^= (int)b); }
 	//*/
 	//template<class T> inline constexpr bool Any(T a, T b) { return (a | b) == a; }
 	template<class T> inline constexpr bool Any(T a, T b) { return int(a & b) != 0; }
@@ -103,8 +96,8 @@ namespace RGL
 	using all_true = std::is_same<bool_pack<bs..., true>, bool_pack<true, bs...>>;
 
 
-	template<bool... bs>
-	using any_true = std::is_same<bool_pack<bs..., true>, bool_pack<true, set_type_v<bool, bs, false>...>>;
+	//template<bool... bs>
+	//using any_true = std::is_same<bool_pack<bs..., true>, bool_pack<true, set_type_v<bool, bs, false>...>>;
 
 
 	//creates the default value of literally anything if applicable
@@ -398,5 +391,7 @@ enum detail::MacroStruct__##mc_enum_name::mc_enum_name##Type : mc_integer_name
 					return true;
 			}
 		}
+
+
 	};
 }

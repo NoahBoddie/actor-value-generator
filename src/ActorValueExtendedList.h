@@ -75,8 +75,9 @@ namespace AVG
 				else
 					logger::info("success, {:08X} formID, addr {:X}", info_query->formID, (uintptr_t)info_query);
 
-				info_query->enumName = "GeneratedExtraValue";
+				info_query->enumName = "GenericValue";
 				info_query->abbreviation = "GEV";
+				info_query->fullName = "GenericExtraValue";
 
 
 				false_avi = info_query;

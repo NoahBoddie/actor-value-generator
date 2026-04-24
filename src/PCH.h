@@ -94,6 +94,8 @@
 #include <variant>
 #include <vector>
 #include <version>
+#include "string.h"
+
 
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
@@ -109,12 +111,13 @@
 
 #include <BGSEntryPointFunctionDataTwoValue.h>
 
-//This is to be used in this things own project
-#define ARITHMETIC_SOURCE 1
-#define AVG_SOURCE 1
 
 
-namespace logger = SKSE::log;
+#include "Lexicon.h"
+
+#include "GameObjectStuff.h"
+
+//namespace logger = SKSE::log;
 
 
 
@@ -127,7 +130,9 @@ namespace logger = SKSE::log;
 
 #include "API_ActorValueGenerator.h"
 
-#include <Arthmetic.h>
+#include "Tome.hpp"
+
+
 
 
 #include <toml++/toml.h>
@@ -135,15 +140,15 @@ namespace logger = SKSE::log;
 #include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
 
-#include <Serialization.h>//This is required to go later, fix that please.
-
 #include "Plugin.h"
 
-
+#include "Impl/Enums.h"
+#include "ClibUtil/utils.hpp"
+#include "MergeMapperPluginAPI.h"
 namespace AVG
 {
-    using namespace RGL;
-    using namespace Arthmetic;
+    using namespace RGL_NAMESPACE;
+    using namespace RGL_INCLUDE_NAMESPACE;
 }
 
 // Compatible declarations with other sample projects.
@@ -152,11 +157,21 @@ namespace AVG
 using namespace std::literals;
 using namespace REL::literals;
 
+
+
+namespace logger
+{
+    using namespace SKSE::log;
+}
+
 namespace util {
     using SKSE::stl::report_and_fail;
 }
 
-#define RELOCATION_OFFSET(SE, AE, ...) REL::VariantOffset(SE, AE, SE).offset()
 
-#undef ARTH_TARGET_TYPE
-#undef ARTH_OBJECT_TYPE
+
+#define RELOCATION_OFFSET(SE, AE, ...) (ptrdiff_t)REL::VariantOffset(SE, AE, SE).offset()
+
+//Move these eventually pls.
+inline LEX::IScript* avg = nullptr;
+inline LEX::IScript* legacy = nullptr;

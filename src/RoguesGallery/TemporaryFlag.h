@@ -1,16 +1,28 @@
 #pragma once
 
-#include "RoguesGallery/Utility.h"
+//TODO: NEEDS DELETING
+//#include "RoguesGallery/Utility.h"
 
+
+#ifdef legacy_flgs
 namespace RGL
 {
 	//Allow equals copying, I think what I want to be able to have tempflags escape scope via references.
 	//Allow it all the things a normal object does, copy constructors, copy assignments, and default constructors specifically.
 	// This way, I can condition the creation or initialization of a temp flag.
 
+	template <typename T1, typename T2>
+	class TestFlag;
 
 
-	template<class FocusType, class EntryType>
+	template <typename T1, typename T2>
+	class TestFlag
+	{
+
+	};
+	
+	
+	template<typename FocusType, typename EntryType>
 	class TempFlag;
 
 	template<class T, class A, class B>
@@ -20,7 +32,7 @@ namespace RGL
 
 
 	//Make a branch of this where it can accept references. For not much value though, honestly speaking.
-	template<class FocusType, class EntryType>
+	template<typename FocusType, typename EntryType>
 	class TempFlag
 	{
 #define init_flag 0xF0
@@ -380,3 +392,4 @@ namespace RGL
 
 	}
 }
+#endif

@@ -3,61 +3,54 @@
 
 namespace AVG
 {
+	using StorageMap = std::map<RE::FormID, ExtraValueStorage>;
+
+	struct ExtraValueStorage::SaveCopyMap
+	{
+		using target_type = StorageMap;
+
+		void operator()(TOME::SerialBuffer& buffer, bool& result, StorageMap& map)
+		{
+			StorageMap copy;
+
+			if (buffer.IsSaving()) {
+				{
+					ExtraValueStorage::ReadLock guard{ ExtraValueStorage::accessLock };
+					copy = map;
+				}
+
+				ExtraValueStorage::SerialMapClass{}(buffer, result, copy);
+			}
+			else{
+				ExtraValueStorage::SerialMapClass{}(buffer, result, copy);
+				{
+					ExtraValueStorage::WriteLock guard{ ExtraValueStorage::accessLock };
+
+					for (auto& pair : copy) {
+						map.insert_or_assign(pair.first, std::move(pair.second));
+					}
+				}
+			}
+		}
+	};
+
+
+	//This now saves a copy and loads the original. I hope this makes it some what faster. If this dead locks on loading I'm going to die.
+	//StorageMap& ExtraValueStorage::_valueTable = TOME::SerialManager::CreateSerializer<ExtraValueStorage::SerialMapClass, PrimaryRecordType::ExtraValueStorage>();
+	StorageMap& ExtraValueStorage::_valueTable = TOME::SerialManager::CreateSerializer<SaveCopyMap, PrimaryRecordType::ExtraValueStorage>();
+
+
 	ExtraValueStorage::ExtraValueStorage(RE::Actor* actor, bool create_default)
 	{
-		if (!actor)
-			return;
+		ResetStorageImpl(actor, create_default);
+		initialized = true;
 
-		//if deserializing, we won't really do anything, just create it.
-
-		auto size = ExtraValueInfo::GetCount(ExtraValueType::Adaptive);
-		logger::debug("store size {} for {}", size, actor->GetName());
-		if (size == ExtraValueInfo::FunctionalID) {
-			
-			return;  //print error, probbably crash
-		}
-		auto& value_data = _valueData.get();
-
-		value_data = std::remove_reference_t<decltype(value_data)>(size, ExtraValueData());
-		
-		_recoveryData.get() = ExtraValueInfo::GetRecoverableValues(actor);
-
-
-
-		if (!create_default)
-			return;
-		//*
-		//auto adapt_list = ExtraValueInfo::GetAdaptiveList();
-
-		//ArgTargetParams tar_params = MakeTargetParamList(actor);
-		//Make this a function plz
-		for (int i = 0; i < value_data.size(); i++) {
-			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByData(i);
-
-			DefaultData* default_data = info->GetDefaultDataSafe();
-
-			if (!info)
-				continue;
-
-			//No real implementation yet, but yeah.
-			if (default_data)
-				if (default_data->_type == DefaultData::Constant || default_data->_type == DefaultData::Explicit)
-					continue;
-
-			//At a later point this will not take place, and instead, base value is NaN while it has not been manually set, so
-			// it shapes to whatever default value exists.
-			float base_value = info->GetExtraValueDefault(actor);//update->updateFunction->RunImpl(actor);
-			//should take the target actor.
-			value_data[i]._base = base_value;
-		}
 		//*/
 		//This is gonna need a neat organized list of info to perform h
 	}
 
 
-	
-
-	ExtraValueStorage* ExtraValueStorage::GetStorage(RE::Actor* actor)
+	StorageView ExtraValueStorage::GetStorage(RE::Actor* actor)
 	{
 		//This won't be used often, but it's used in situations where it would be ok to not create storage yet.
 		if (!actor) {
@@ -65,18 +58,30 @@ namespace AVG
 		}
 		
 		if (actor->IsPlayerRef() == true)
-			return PlayerStorage::GetAsPlayable(false);
-
-		ReadLock guard{ accessLock };
+		{
+			auto test = PlayerStorage::GetAsPlayable(false);
+			return test;
+		}
 		
+		//ReadLock guard{ accessLock };
+		StorageView view{ accessLock, true };
 
-		auto result = _valueTable->find(actor->formID);
+		auto result = _valueTable.find(actor->formID);
 
-		return result == _valueTable->end() ? nullptr : result->second;
+		ExtraValueStorage* storage = nullptr;
+		
+		if (_valueTable.end() != result && result->second.initialized) {
+			storage = &result->second;
+		}
+
+		view.SetStorage(storage);
+		
+		//return result == _valueTable.end() ? nullptr : &result->second;
+		return view;
 	}
 
 
-	ExtraValueStorage& ExtraValueStorage::GetCreateStorage(RE::Actor* actor)
+	StorageView ExtraValueStorage::ObtainStorage(RE::Actor* actor)
 	{
 		//Should this be thead locked? I feel like this should be thread locked
 
@@ -85,25 +90,24 @@ namespace AVG
 			throw nullptr;  //Just crash, this isn't supposed to be found.
 		}
 
-		if (actor->IsPlayerRef() == true)
-			return *PlayerStorage::GetAsPlayable(true);
-
-		WriteLock guard{ accessLock };
-
-		ExtraValueStorage*& storage_spot = (*_valueTable)[actor->formID];
-
-		if (storage_spot) {
-			//logger::warn("Stor loc {}", (uintptr_t)storage_spot);
-			return *storage_spot;
+		if (actor->IsPlayerRef() == true) {
+			auto test = PlayerStorage::GetAsPlayable(true);
+			return *test;
 		}
 
-		//guard.unlock();
 
-		ExtraValueStorage* new_storage = new ExtraValueStorage(actor, false);
+		StorageView view{ accessLock, false };
+		//WriteLock guard{ accessLock };
+		
+		ExtraValueStorage& storage = _valueTable[actor->formID];
+		
+		if (!storage.initialized) {
+			storage = ExtraValueStorage{ actor, false };
+		}
 
-		storage_spot = new_storage;
-
-		return *new_storage;
+		view.SetStorage(storage);
+		//return storage;
+		return view;
 	}
 
 
@@ -111,9 +115,8 @@ namespace AVG
 	{
 		WriteLock guard{ accessLock };
 
-		if (!_id || _valueTable->contains(_id) == false)
+		if (!_id)
 			return false;
-
 
 		if (_id == 0x14) {
 			logger::debug("PlayerStorage cannot be removed.");
@@ -121,24 +124,80 @@ namespace AVG
 		
 		}
 
-		//needs an initializer part
-		//It will need to search the left hand, the right hand
-		logger::info("[Unregister {:08X} ]", _id);
+		auto removes = _valueTable.erase(_id);
+		if (removes)
+			logger::info("[Unregister {:08X} ]", _id);
 		
-		ExtraValueStorage* storage = _valueTable[_id];
 
-		//LOCK while removing
+		return removes;
+	}
 
-		_valueTable->erase(_id);
+	void ExtraValueStorage::RemoveAllStorages()
+	{
+		WriteLock guard{ accessLock };
 
-		//delete *cData;
-		delete storage;
+		_valueTable.clear();
+	}
 
-		return true;
+	void ExtraValueStorage::ResetStorageImpl(RE::Actor* actor, bool init_default)
+	{
+		if (!actor)
+			return;
+
+		WriteLock guard;
+
+		if (initialized) {
+			guard = WriteLock{ accessLock };
+		}
+
+		//if deserializing, we won't really do anything, just create it.
+
+		auto size = ExtraValueInfo::GetCountUpto(actor->IsPlayerRef() ? ExtraValueType::Exclusive : ExtraValueType::Adaptive);
+		logger::debug("store size {} for {}", size, actor->GetName());
+		if (size == ExtraValueInfo::FunctionalID) {
+			return;  //print error, probbably crash
+		}
+		
+		//_valueData = std::vector<ExtraValueData>(size, ExtraValueData());
+		//_recoveryData = ExtraValueInfo::GetRecoverableValues(actor);
+
+		_valueData.resize(size);
+		std::fill(_valueData.begin(), _valueData.end(), ExtraValueData{});
+		ExtraValueInfo::FillRecoverableValues(actor, _recoveryData);
+
+
+
+		if (!init_default)
+			return;
+		//*
+		//auto adapt_list = ExtraValueInfo::GetAdaptiveList();
+
+		//ArgTargetParams tar_params = MakeTargetParamList(actor);
+		//Make this a function plz
+		for (int i = 0; i < _valueData.size(); i++) {
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByData(i);
+
+
+
+			if (!info)
+				continue;
+
+			DefaultInfo* default_data = info->FetchDefaultInfo();
+
+			//No real implementation yet, but yeah.
+			if (default_data)
+				if (default_data->_type == DefaultInfo::Constant || default_data->_type == DefaultInfo::Explicit)
+					continue;
+
+			//At a later point this will not take place, and instead, base value is NaN while it has not been manually set, so
+			// it shapes to whatever default value exists.
+			float base_value = info->GetExtraValueDefault(actor);//update->updateFunction->RunImpl(actor);
+			//should take the target actor.
+			_valueData[i]._base = base_value;
+		}
 	}
 
 
 
-
-	PlayerStorage& PlayerStorage::_singleton = SerializationHandler::CreatePrimarySerializer<PlayerStorage>(PrimaryRecordType::PlayerStorage);
+	PlayerStorage& PlayerStorage::_singleton = TOME::SerialManager::CreateSerializer<PlayerStorage, PrimaryRecordType::PlayerStorage>();
 }

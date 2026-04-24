@@ -22,7 +22,11 @@
             "VCPKG_HOST_TRIPLET": "x64-windows-static-md",
             "VCPKG_INSTALLED_DIR": "$env{VCPKG_ROOT}/installed",
             "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake",
-            "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL"
+            "CMAKE_MSVC_RUNTIME_LIBRARY": "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL",
+            "VCPKG_OVERLAY_PORTS": {
+              "type": "STRING",
+              "value": "${sourceDir}/cmake/ports/"
+            }
           }
         },
         {

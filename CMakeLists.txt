@@ -5,8 +5,8 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ## Define project
 ########################################################################################################################
 project(
-        ActorValueExtension
-        VERSION 1.9.5.12
+        ActorValueGenerator
+        VERSION 2.2.12.0
         DESCRIPTION "An SKSE modding tool that enables users to make new actor values as well as extending their existing functionally."
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
@@ -31,70 +31,34 @@ configure_file(
 )
 
 set(headers
-#I would really like to make this as a sort of dependency instead. But for now.
-        include/Arthmetic.h
-        include/Serialization.h
-        include/RoguesGallery.h
-
-        include/API_Arithmetic.h
+        #I would really like to make this as a sort of dependency instead. But for now.
         include/API_ActorValueGenerator.h
+        src/MergeMapperPluginAPI.h
+
 )
 
 set(sources
-        src/Arthmetic/Constructor.h
-        src/Arthmetic/ArthmeticObject.h
-        src/Arthmetic/IDelegate.h
-        src/Arthmetic/DelegateType.h
-        src/Arthmetic/IRoutine.h
-        src/Arthmetic/Coroutine.h
-        src/Arthmetic/Subroutine.h
-        src/Arthmetic/DelegateArgument.h
-        src/Arthmetic/DelegateArgument.h
-        #src/Arthmetic/DualOperator.h
-        #src/Arthmetic/OpenOperator.h
-        #src/Arthmetic/FunctionDelegate.h
-        src/Arthmetic/IReadyArthmetic.h
-        src/Arthmetic/IOperator.h
-        src/Arthmetic/OperatorType.h
-        src/Arthmetic/ArgumentType.h
-        src/Arthmetic/RoutineArgument.h
-        src/Arthmetic/RoutineDelegate.h
-        src/Arthmetic/RoutineItem.h
-        src/Arthmetic/RoutineItemType.h
-        src/Arthmetic/TargetType.h
-        src/Arthmetic/Record.h
-        src/Arthmetic/IDirective.h
-        src/Arthmetic/IFormula.h
-        src/Arthmetic/FunctionInterface.h
-        src/Arthmetic/FormulaDelegate.h
-        src/Arthmetic/ParameterSetting.h
-
-        src/Arthmetic/ArthmeticConstructor.h
-        src/Arthmetic/ArthmeticParser.h
-        src/Arthmetic/ArthmeticUtility.h
-        src/Arthmetic/RoutineItem.cpp
-        src/Arthmetic/IReadyArthmetic.cpp
-        src/Arthmetic/DelegateArgument.cpp
-
-
-        src/Serialization/ISerializer.h
-        src/Serialization/SerialArgument.h
-        src/Serialization/SerialComponent.h
-        src/Serialization/SerialConstructor.h
-        src/Serialization/SerialIterator.h
-        src/Serialization/SerializableList.h
-        src/Serialization/SerializableMap.h
-        src/Serialization/SerializableObject.h
-        src/Serialization/SerializablePair.h
-        src/Serialization/SerializationTypePlayground.h
-        src/Serialization/SerializingWrapper.h
+        src/Legacy/LegacySerializer.h
+        src/Legacy/ISerializer.h
+        src/Legacy/SerialArgument.h
+        src/Legacy/SerialComponent.h
+        src/Legacy/SerialConstructor.h
+        src/Legacy/SerialIterator.h
+        src/Legacy/SerializableList.h
+        src/Legacy/SerializableMap.h
+        src/Legacy/SerializableObject.h
+        src/Legacy/SerializablePair.h
+        src/Legacy/SerializationTypePlayground.h
+        src/Legacy/SerializingWrapper.h
 
       
-        src/RoguesGallery/Utility.h
-        src/RoguesGallery/TemporaryFlag.h
-
-
+        
+        src/Impl/Enums.h
+        src/MergeMapperPluginAPI.cpp
+        src/ExtraNPC.h
         src/Types.h
+        src/Resources.h
+        src/LegacyFunctions.h
         src/ExtraValue.h
         src/BGSEntryPointFunctionDataTwoValue.h
         src/main.cpp
@@ -110,8 +74,8 @@ set(sources
         src/Utility.h
         src/ValueAliasHandler.h
 
-        src/API_Arithmetic.cpp
         src/API_ActorValueGenerator.cpp
+        src/FileParser.h
 
         ${CMAKE_CURRENT_BINARY_DIR}/version.rc)
 
@@ -135,11 +99,15 @@ message("\tTests: ${BUILD_TESTS}")
 ########################################################################################################################
 ## Configure target DLL
 ########################################################################################################################
+find_package(directxtk CONFIG REQUIRED)
 find_package(CommonLibSSE CONFIG REQUIRED)
-
 
 add_commonlibsse_plugin(${PROJECT_NAME} SOURCES ${headers} ${sources})
 add_library("${PROJECT_NAME}::${PROJECT_NAME}" ALIAS "${PROJECT_NAME}")
+
+
+#THis attempt has not worked.
+
 
 target_include_directories(${PROJECT_NAME}
         PRIVATE
@@ -151,6 +119,38 @@ target_include_directories(${PROJECT_NAME}
         PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 
+
+if (NOT LexiconSKSEPath)
+	cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH CMAKE_REPO_DIR)
+	set(LexiconSKSEPath "${CMAKE_REPO_DIR}/lexicon-skse")
+endif()
+
+add_subdirectory(${LexiconSKSEPath} LexiconSKSE)
+add_dependencies(${PROJECT_NAME} LexiconSKSE::LexiconSKSE)
+
+
+
+if (NOT TomePath)
+	cmake_path(GET CMAKE_CURRENT_SOURCE_DIR PARENT_PATH CMAKE_REPO_DIR)
+	set(TomePath "${CMAKE_REPO_DIR}/tome-serializer")
+endif()
+
+add_subdirectory(${TomePath} Tome)
+add_dependencies(${PROJECT_NAME} Tome::Tome)
+
+
+#message("**${PROJECT_SOURCE_DIR}")
+
+target_link_libraries(
+	${PROJECT_NAME}
+	PRIVATE
+        Tome::Tome
+        Lexicon::Lexicon
+        LexiconSKSE::LexiconSKSE
+)
+
+
+
 target_precompile_headers(${PROJECT_NAME}
         PRIVATE
         src/PCH.h)
@@ -161,33 +161,7 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/Sample"
 install(TARGETS ${PROJECT_NAME}
         DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 
-########################################################################################################################
-## Configure unit tests
-########################################################################################################################
-if(BUILD_TESTS)
-    find_package(Catch2 CONFIG REQUIRED)
 
-    include(CTest)
-    include(Catch)
-
-    add_executable(
-            ${PROJECT_NAME}Tests
-            ${headers}
-            ${tests})
-
-    target_link_libraries(
-            ${PROJECT_NAME}Tests
-            PRIVATE
-            ${PROJECT_NAME}
-            Catch2::Catch2WithMain)
-
-    target_precompile_headers(${PROJECT_NAME}Tests
-            PRIVATE
-            src/PCH.h)
-
-    catch_discover_tests(${PROJECT_NAME}Tests)
-    add_test(NAME ${PROJECT_NAME}Tests COMMAND ${PROJECT_NAME}Tests)
-endif()
 
 ########################################################################################################################
 ## Automatic plugin deployment

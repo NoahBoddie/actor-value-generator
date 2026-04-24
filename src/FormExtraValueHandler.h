@@ -10,18 +10,23 @@
 //#define LeftActorValue() pad84
 
 
+#define SKILL_2_0
 
 #ifdef USE_UNSTABLE_TYPES
 #define UNSTABLE_FORM_TYPES, RE::BGSMusicTrackFormWrapper, RE::BGSStoryManagerNodeBase
+#define UNSTABLE_SKILL_TYPES, RE::TESNPC, RE::TESClass, TESFurniture
 #else
 #define UNSTABLE_FORM_TYPES
+#define UNSTABLE_SKILL_TYPES
 #endif
+
+
 
 #define FORM_TYPES \
 	RE::BGSPerk, \
 	RE::EffectSetting, RE::SpellItem, RE::AlchemyItem, RE::EnchantmentItem, RE::IngredientItem, \
 	RE::TESFaction, RE::TESTopicInfo, RE::TESIdleForm, RE::BGSCameraPath, RE::BGSMessage, RE::TESLoadScreen, RE::BGSConstructibleObject, \
-	RE::TESPackage, RE::BGSScene, RE::TESObjectWEAP UNSTABLE_FORM_TYPES
+	RE::TESPackage, RE::BGSScene, RE::TESObjectWEAP, RE::TESObjectBOOK UNSTABLE_SKILL_TYPES UNSTABLE_FORM_TYPES
 
 namespace AVG
 {
@@ -45,7 +50,7 @@ namespace AVG
 	template <class B>
 	using VoidCaster = ConversionCaster<void*, B>;
 
-	class FormExtraValueHandler : public RE::BSTEventSink<SKSE::ModCallbackEvent>
+	struct FormExtraValueHandler : public RE::BSTEventSink<SKSE::ModCallbackEvent>
 	{
 		using EventResult = RE::BSEventNotifyControl;
 
@@ -82,7 +87,9 @@ namespace AVG
 			}
 
 			RE::TESConditionItem* item = condition.head;
-			logger::info("~{:X}", (uintptr_t)item);
+
+			QuerySettings settings = QuerySettings::None;
+
 			while (item != nullptr) {
 				RE::FUNCTION_DATA& function_data = item->data.functionData;
 
@@ -90,25 +97,28 @@ namespace AVG
 				default:
 					break;
 
+#ifdef SKILL_2_0
+				case RE::FUNCTION_DATA::FunctionID::kEPModSkillUsage_IsAdvanceSkill:
+					settings |= QuerySettings::RequiresAdvance;
+					[[fallthrough]];
+				case RE::FUNCTION_DATA::FunctionID::kIsWeaponSkillType:
+				case RE::FUNCTION_DATA::FunctionID::kEPMagic_SpellHasSkill:
+					settings |= QuerySettings::RequiresSkill;
+					[[fallthough]];
+#endif	
+
 				case RE::FUNCTION_DATA::FunctionID::kGetActorValue:
 				case RE::FUNCTION_DATA::FunctionID::kGetPermanentActorValue:
 				case RE::FUNCTION_DATA::FunctionID::kGetActorValuePercent:
 				case RE::FUNCTION_DATA::FunctionID::kGetBaseActorValue:
 					//logger::info("THRILL, {}", function_data.params[0]);
 				{
-					VoidCaster<RE::ActorValue> stored_av = function_data.params[0];
+					RE::ActorValue stored_av = static_cast<RE::ActorValue>(reinterpret_cast<uintptr_t>(function_data.params[0]));
 					
-
-					//if (log)
-					//	logger::debug("AV {} in info", stored_av._b);
-
-					
-					//if (stored_av._b > RE::ActorValue::kTotal || (int)stored_av._b < 0)
-					//	logger::debug("processing {} form type {}, with a value of {}", form->GetName(), (int)form->GetFormType(), (int)stored_av._b);
-
-
-					stored_av = ValueAliasHandler::AliasToValue(stored_av, form, change_num);
-					function_data.params[0] = stored_av;
+					if (AliasToValue(form, stored_av, settings) == true) {
+						function_data.params[0] = reinterpret_cast<void*>(stored_av);
+						change_num++;
+					}
 					
 					//if (reinterpret_cast<uintptr_t>(function_data.params[0]) == static_cast<uintptr_t>(RE::ActorValue::kVariable01)) {
 					//	function_data.params[0] = reinterpret_cast<void*>(new_av);
@@ -127,6 +137,7 @@ namespace AVG
 			//I'd like to use this as a helper to see how many forms are processed.
 			int successes = 0;
 
+			//TODO: I'd like to actually use armor here, but it doesn't quite seem to be in the cards. I'll make a hook on it's impact later.
 
 			IF_FORM(RE::EffectSetting)
 			{
@@ -134,33 +145,40 @@ namespace AVG
 				RE::EffectSetting::EffectSettingData& effect_data = form->data;
 
 				using Archetype = RE::EffectArchetypes::ArchetypeID;
+				using EffectSettingData = RE::EffectSetting::EffectSettingData;
+
+				QuerySettings setting = form->data.flags.any(EffectSettingData::Flag::kRecover) ? QuerySettings::RequiresModifier : QuerySettings::RequiresDamage;
 
 				switch (effect_data.archetype)
 				{
 				case Archetype::kDualValueModifier:
-					effect_data.secondaryAV = ValueAliasHandler::AliasToValue(effect_data.secondaryAV, form, successes, AliasQuerySettings::RequireSetting);
+					successes += AliasToValue(form, effect_data.secondaryAV, setting);
 					[[fallthrough]];
 				//Forgot accumulating.
 				case Archetype::kAbsorb:
-				case Archetype::kValueAndParts:
 				case Archetype::kValueModifier:
+				case Archetype::kValueAndParts:
 				case Archetype::kPeakValueModifier:
 				case Archetype::kAccumulateMagnitude:
-					effect_data.primaryAV = ValueAliasHandler::AliasToValue(effect_data.primaryAV, form, successes, AliasQuerySettings::RequireSetting);
+					successes += AliasToValue(form, effect_data.primaryAV, setting);
 					[[fallthrough]];
 				default:
-					effect_data.resistVariable = ValueAliasHandler::AliasToValue(effect_data.resistVariable, form, successes, AliasQuerySettings::AllowNone);
+					successes += AliasToValue(form, effect_data.resistVariable, QuerySettings::AllowNone);
 					break;
 				}
 
 				HandleCondition(form->conditions, form, successes);
+
+#ifdef SKILL_2_0
+				successes += AliasToValue(form, form->data.associatedSkill, QuerySettings::RequiresSkill);
+#endif
 			} 
 			else IF_FORM(RE::BGSPerk)
 			{
 				using PerkEntryFunction = RE::BGSEntryPointPerkEntry::EntryData::Function;
-					
-				HandleCondition(form->perkConditions, form, successes);
 				
+				HandleCondition(form->perkConditions, form, successes);
+
 				for (auto& entry : form->perkEntries)
 				{
 					if (entry->GetType() != RE::PERK_ENTRY_TYPE::kEntryPoint) {
@@ -168,12 +186,23 @@ namespace AVG
 					}
 
 					RE::BGSEntryPointPerkEntry* entry_point = skyrim_cast<RE::BGSEntryPointPerkEntry*>(entry);
-					//*
+					
 					if (!entry_point) {
 						logger::warn("No entry point in {} at {:08X}", form->GetName(), form->GetFormID());
 						continue;
 					}
-					//*/
+
+					if (auto i = entry_point->entryData.numArgs; !i) {
+						
+						if (entry_point->conditions.size() != i) {
+							logger::error("Entry point for {} at {:08X} has no condition args. If this form is used in game it will crash.",
+								form->GetName(), form->GetFormID());
+							
+							return successes;
+						}
+						continue;
+					}
+					
 					for (auto& condition : entry_point->conditions) {
 						HandleCondition(condition, form, successes);
 					}
@@ -196,11 +225,14 @@ namespace AVG
 					if (!function_data)
 						continue;
 
-					RE::ActorValue new_av = ValueAliasHandler::AliasToValue(static_cast<RE::ActorValue>(function_data->data1), form, successes);
+					RE::ActorValue new_av = static_cast<RE::ActorValue>(function_data->data1);
+
+					successes += AliasToValue(form, new_av);
 					
 					function_data->data1 = static_cast<float>(new_av);
 					
 				}
+				
 			}
 			else IF_FORM(RE::TESFaction)
 			{
@@ -234,8 +266,33 @@ namespace AVG
 			else IF_FORM(RE::TESObjectWEAP)
 			{
 				auto& weapon_data = form->weaponData;
-				weapon_data.resistance = ValueAliasHandler::AliasToValue(*weapon_data.resistance, form, successes,
-					AliasQuerySettings::AllowNone);
+				
+				auto value = *weapon_data.resistance;
+
+				successes += AliasToValue(form, value, QuerySettings::AllowNone);
+
+				weapon_data.resistance = value;
+
+				//////////////////////
+
+#ifdef SKILL_2_0
+				value = *weapon_data.skill;
+				//This should allow none.
+				successes += AliasToValue(form, value, QuerySettings::RequiresSkill);
+
+				weapon_data.skill = value;
+
+				///////////////////////
+
+
+				value = *weapon_data.embeddedWeaponAV;
+
+				successes += AliasToValue(form, value, QuerySettings::RequiresSkill | QuerySettings::AllowNone);
+
+				weapon_data.embeddedWeaponAV = value;
+#endif
+
+				
 				//weapon_data.skill = ValueAliasHandler::AliasToValue(*weapon_data.skill, form);//Disabled for now
 				
 				//Embed isn't used so maybe not needed. But just in case someone does have something of the like.
@@ -280,6 +337,32 @@ namespace AVG
 				//Check all
 				HandleCondition(form->track->conditions, form, successes);
 			}
+			else IF_FORM(RE::TESObjectBOOK)
+			{
+
+#ifdef SKILL_2_0
+				if (form->TeachesSkill() == true) {
+					successes += AliasToValue(form, form->data.teaches.actorValueToAdvance, QuerySettings::RequiresSkill);
+				}
+#endif
+
+			}
+			else IF_FORM(RE::TESFurniture)
+			{
+				//Should require advance
+			}
+			else IF_FORM(RE::TESClass)
+			{
+
+#ifdef SKILL_2_0
+				//should require advance
+				//if (form() == true) {
+				//	successes += AliasToValue(form, form->data.teaches.actorValueToAdvance);
+				//}
+#endif
+
+				}
+
 			else IF_LIKE_FORM(RE::MagicItem)
 			{
 				//Iterate through and handle conditions.
@@ -288,13 +371,12 @@ namespace AVG
 					HandleCondition(effect->conditions, form, successes);
 				}
 
-#ifndef _DEBUG
-				return successes;
-#endif
-
 				//RE::MagicItem* magic = nullptr;
 				//I would like something where you can use a keyword to control the primary alias, then from there it searches the costliest
 				//Secondarily, I would like this to be able to do something where it can search the spell itself for keywords.
+				
+				
+
 				RE::Effect* effect_item = form->GetCostliestEffectItem();
 				
 				if (!effect_item)
@@ -305,35 +387,61 @@ namespace AVG
 				constexpr bool is_enchant = std::is_same_v<FormType, RE::EnchantmentItem>;
 				constexpr bool is_spell = std::is_same_v<FormType, RE::SpellItem>;
 				//GetActorValueForCost
+				
+				RE::MagicItem::SkillUsageData skill_use;
+				skill_use.effect = nullptr;
+
+				//if (form->GetSkillUsageData(skill_use) == true)
+				//	logger::info("*^* Skillful data found using {}", magic_enum::enum_name(skill_use.skill));
+
 
 				if constexpr (is_enchant || is_spell)
 				{
+
+					if constexpr (is_enchant) {
+						//This is honestly a constant.
+						if (form->GetCastingType() == RE::MagicSystem::CastingType::kConstantEffect)
+							return successes;
+					}
+
 					constexpr RE::ActorValue right_expect = is_enchant ? RE::ActorValue::kRightItemCharge : RE::ActorValue::kMagicka;
 					constexpr RE::ActorValue left_expect = is_enchant ? RE::ActorValue::kLeftItemCharge : RE::ActorValue::kMagicka;
 
-					RE::ActorValue right_hand;
-					RE::ActorValue left_hand;
+					RE::ActorValue general = RE::ActorValue::kNone;
+					RE::ActorValue right_hand = RE::ActorValue::kNone;
+					RE::ActorValue left_hand = RE::ActorValue::kNone;
 
-					if constexpr (is_enchant) {
-						if (form->GetCastingType() == RE::MagicSystem::CastingType::kConstantEffect)
-							return successes;
-						//RequireSetting
-						right_hand = ValueAliasHandler::AliasToValue(RE::ActorValue::kRightItemCharge, cost_effect, successes,
-							AliasQuerySettings::IgnorePlugin, AliasQuerySettings::RequireCost);
-						left_hand = ValueAliasHandler::AliasToValue(RE::ActorValue::kLeftItemCharge, cost_effect, successes,
-							AliasQuerySettings::IgnorePlugin, AliasQuerySettings::RequireCost);
+
+					successes += AliasToValue(cost_effect, VirtualValue::kCost, general, QuerySettings::RequiresDamage | QuerySettings::IgnorePlugin);
+					
+					bool trigger = AliasToValue(cost_effect, VirtualValue::kLeftCost, left_hand, QuerySettings::RequiresDamage | QuerySettings::IgnorePlugin);
+
+					if (!trigger) {
+						left_hand = general;
+						
 					}
 					else {
-						right_hand = ValueAliasHandler::AliasToValue(RE::ActorValue::kMagicka, cost_effect, successes,
-							AliasQuerySettings::IgnorePlugin, AliasQuerySettings::RequireCost);
-						left_hand = right_hand;
+						successes++;
 					}
+
+					trigger = AliasToValue(cost_effect, VirtualValue::kRightCost, right_hand, QuerySettings::RequiresDamage | QuerySettings::IgnorePlugin);
+
+					if (!trigger) {
+						right_hand = general;
+
+					}
+					else {
+						successes++;
+					}
+
 					
 					if (right_hand != right_expect)
-						form->pad74 = static_cast<uint32_t>(right_hand);
+						//form->pad74 = static_cast<uint32_t>(right_hand);
+						Utility::GetCostSetting(form, kRightHand) = right_hand;
 
 					if (left_hand != left_expect)
-						form->pad84 = static_cast<uint32_t>(left_hand);
+						//form->pad84 = static_cast<uint32_t>(left_hand);
+						Utility::GetCostSetting(form, kLeftHand) = left_hand;
 				}
 				
 				//form->GetSkillUsageData(SkillUsageData & a_data)
@@ -342,7 +450,7 @@ namespace AVG
 				static bool shown = false;
 
 				if (!shown)
-					logger::info("Processing for form type {} not found.", typeid(FormType).name());
+					logger::error("Processing for form type {} not found.", typeid(FormType).name());
 
 				shown = true;
 			}
@@ -447,14 +555,21 @@ namespace AVG
 				logger::error("Error occured, FormExtraValueHandler::Initialize failed to get RE::TEDataHandler.");
 			}
 
+			_init = true;
+
 			//There's a lot of forms in this, so you may want to clear it.
 			unrepresentedForms.clear();
 
 			return data_handler;
 		}
 
+		static inline bool _init = false;
+
 	public:
-			
+		static bool Initialized()
+		{
+			return _init;
+		}
 		static void Initialize()
 		{
 			if (KID == nullptr)
@@ -485,7 +600,7 @@ namespace AVG
 
 		static void AddUnrepresentedForm(RE::TESForm* form)
 		{
-			if (!form)
+			if (!form || Initialized() == true)
 				return;
 
 			unrepresentedForms[*form->formType].emplace(form);
