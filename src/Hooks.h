@@ -344,18 +344,11 @@ namespace AVG
 			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(raw_value);
 
 
-			if (a4 > 0 && a2 == ActorValueModifier::kDamage && a3 == RE::ActorValue::kHealth)
-			{
-				//logger::info("Health boost!");
-				//throw nullptr;
-			}
 
-			if (info) {  //raw_value == 256) {
+			if (info) {  
 				logger::debug("hit mod {}, {}, val {}, who {}", raw_value, (int32_t)a2, a4, !actor ? "none" : actor->GetName());
 				info->ModExtraValue(a_this, actor, a4, a2);
-				//Psuedo::ModExtraValue(a_this, "HitsTaken", a4, a2);
 			} else {
-				//logger::debug("pass mod {}, {}, val {}, who {}", raw_value, (int32_t)a2, a4, !actor ? "none" : actor->GetName());
 				auto old_value = a_this->GetActorValueModifier(a2, a3);
 				func(a_this, a2, a3, a4, actor);
 				ExtraValueInfo::SendOnActorValueChanged(a_this, nullptr, a3, a2, old_value, old_value + a4);
@@ -364,6 +357,45 @@ namespace AVG
 
 		static inline REL::Relocation<decltype(thunk)> func;
 	};
+
+	//VTABLE
+	struct ModBaseActorValueHook
+	{
+		static void Patch()
+		{
+			//*
+
+			REL::Relocation<uintptr_t> PlayerCharacter__Actor_VTable{ RE::VTABLE_PlayerCharacter[5] };
+			REL::Relocation<uintptr_t> Character__Actor_VTable{ RE::VTABLE_Character[5] };
+
+			func[0] = PlayerCharacter__Actor_VTable.write_vfunc(0x05, thunk<0>);
+			func[1] = Character__Actor_VTable.write_vfunc(0x05, thunk<1>);
+
+			logger::info("ModBaseActorValueHook complete...");
+		}
+
+		template<int I>
+		static void thunk(RE::ActorValueOwner* a_this, RE::ActorValue av, float value)
+		{
+			RE::Character* target = skyrim_cast<RE::Character*>(a_this);
+
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByAV(av);
+
+			if (info) {
+				info->ModExtraValue(target, nullptr, value, RE::ACTOR_VALUE_MODIFIER::kTotal);
+			}
+			else {
+				auto old_value = a_this->GetBaseActorValue(av);
+				func[I](a_this, av, value);
+				ExtraValueInfo::SendOnActorValueChanged(target, nullptr, av, RE::ActorValueModifier::kTotal, old_value, value);
+			}
+		}
+
+		static inline REL::Relocation<decltype(thunk<0>)> func[2];
+	};
+
+
+
 
 	//Can become a vtable call instead.
 	struct GetBaseActorValueHook
@@ -412,31 +444,22 @@ namespace AVG
 		}
 
 		template <int I>
-		static float thunk(RE::ActorValueOwner* a_this, RE::ActorValue a2)
-		//static float thunk(void* a_this, RE::ActorValue a2)
+		static float thunk(RE::ActorValueOwner* a_this, RE::ActorValue av)
 		{
-			//logger::debug("AVBG hook");
-
-			//using CharacterType = std::conditional_t<I == 0, RE::Character, RE::PlayerCharacter>;
 			using CharacterType = RE::Character;
 
 			CharacterType* target = skyrim_cast<CharacterType*>(a_this);
-			//CharacterType* target = skyrim_cast<CharacterType*>(a_this);
 
-			uint32_t raw_value = std::bit_cast<uint32_t>(a2);
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByAV(av);
 
-			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByValue(raw_value);
-
-			if (info) {  //raw_value == 256) {
+			if (info) {
 				auto value = info->GetExtraValue(target, ExtraValueInput::Base);
-				//auto value = Psuedo::GetExtraValue(target, "HitsTaken", ExtraValueInput::Base);
-				logger::debug("hit base {}, val {}", raw_value, value);
 
 				return value;
 			} 
 			else 
 			{
-				auto value = func[I](a_this, a2);
+				auto value = func[I](a_this, av);
 				//logger::debug("pass base {}, val {}", raw_value, value);
 				
 				return value;
@@ -568,28 +591,16 @@ namespace AVG
 
 		static RE::ActorValue thunk(char* av_name)
 		{
-			//logger::debug("AVID hook");
-			//Would like strcmp with case insensitivity
-			/*
-			int i = 0;
+			auto result = func(av_name);
 
-			while ()
-			{
-				char& letter = av_name
-			}
-			//*/
 
-			//I actually think the other should go first. Would prevent overriding too.
-			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByName(av_name);
-
-			if (info) {//Utility::StrCmpI(av_name, "HitsTaken") == true) {
-				ValueID id = info->GetValueID();
-				logger::debug("EV Queried at  {}", id);
-				return static_cast<RE::ActorValue>(id);
+			if (result >= RE::ActorValue::kTotal) {
+				if (ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByName(av_name)) {
+					result = info->GetValueIDAsAV();
+				}
 			}
-			else {
-				return func(av_name);
-			}
+				
+			return result;
 		}
 
 		static inline REL::Relocation<decltype(thunk)> func;
@@ -1628,6 +1639,7 @@ namespace AVG
 	{
 		static void Patch()
 		{
+			//TODO: In the future, I'd rather hook the function below this
 			REL::Relocation<uintptr_t> Character__Actor_VTable{ RE::VTABLE_Character[0] };
 			REL::Relocation<uintptr_t> PlayerCharacter__Actor_VTable{ RE::VTABLE_PlayerCharacter[0] };
 
@@ -1646,9 +1658,9 @@ namespace AVG
 			if (!value_storage) {
 				return;
 			}
-			logger::debug("Resetting actor '{}'.", a_this->GetDisplayFullName());
+			logger::debug("Resetting actor skills and attributes '{}'.", a_this->GetDisplayFullName());
 
-			value_storage->ResetStorage(a_this);
+			value_storage->ResetSkillsAndAttributes(a_this);
 		}
 
 		template <unsigned int I = 0>
@@ -2495,7 +2507,65 @@ namespace AVG
 
 	//Another write_call needed to happen here, but I forgor what it was.
 
+	struct Actor_RemoveActorValueModifiers
+	{
+		static void Install()
+		{
+			//SE: 621590, AE: 658E10, VR: ???
+			auto hook = REL::RelocationID(37527, 38476).address();
+			uintptr_t offset = 0x6;
 
+
+			struct Patch : Xbyak::CodeGenerator
+			{
+				explicit Patch(uintptr_t address, uintptr_t length)
+				{
+					// Hook returns here. Execute the restored bytes and jump back to the original function.
+					for (size_t i = 0; i < length; i++)
+						db(*reinterpret_cast<uint8_t*>(address + i));
+
+					jmp(ptr[rip]);
+					dq(address + length);
+				}
+			} static code{ hook, offset };
+
+
+
+			auto& trampoline = SKSE::GetTrampoline();
+
+			//func = (uintptr_t)code.getCode();
+
+			//trampoline.write_branch<5>(hook_addr, thunk);
+
+			//return;
+
+			auto placed_call = IsCallOrJump(hook) > 0;
+
+			auto place_query = trampoline.write_branch<5>(hook, (uintptr_t)thunk);
+
+			if (!placed_call)
+				func = (uintptr_t)code.getCode();
+			else
+				func = place_query;
+
+
+			logger::info("Actor_RemoveActorValueModifiers complete...");
+		}
+
+		static void thunk(RE::Actor* a_this, RE::ActorValue a2)
+		{
+			if (ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByAV(a2)){
+				if (auto storage = ExtraValueStorage::GetStorage(a_this)){
+					storage->ClearModifiers(info->GetDataID());
+				}
+			}
+			else {
+				return func(a_this, a2);
+			}
+		}
+
+		static inline REL::Relocation<decltype(thunk)> func;
+	};
 
 
 	struct Hooks
@@ -2539,11 +2609,13 @@ namespace AVG
 			GetActorValueHook::Patch();
 			SetActorValueHook::Patch();
 			ModActorValueHook::Patch();
+			ModBaseActorValueHook::Patch();
 			GetBaseActorValueHook::Patch();
 			GetActorValueModifierHook::Patch();
 			GetActorValueIDFromNameHook::Patch();
 			GetActorValueNameFromIDHook::Install();
 			GetActorValueScriptNameFromIDHook::Install();
+			Actor_RemoveActorValueModifiers::Install();
 			//V2
 			MagicItemCtorHook::Patch();
 			GetActorValueForCostHook::Patch();

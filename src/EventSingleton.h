@@ -92,9 +92,9 @@ namespace AVG
 
 				auto stats_menu = ui->GetMenu<RE::StatsMenu>();
 				if (stats_menu)
-					logger::info("<*> Loaded stats: {}", stats_menu->GetRuntimeData().skillTrees.size());
+					logger::debug("<*> Loaded stats: {}", stats_menu->GetRuntimeData().skillTrees.size());
 				else
-					logger::info("<*> Stats menu empty");
+					logger::debug("<*> Stats menu empty");
 			}
 
 			return EventResult::kContinue;

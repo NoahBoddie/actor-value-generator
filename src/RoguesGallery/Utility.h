@@ -391,5 +391,7 @@ enum detail::MacroStruct__##mc_enum_name::mc_enum_name##Type : mc_integer_name
 					return true;
 			}
 		}
+
+
 	};
 }

@@ -94,6 +94,8 @@
 #include <variant>
 #include <vector>
 #include <version>
+#include "string.h"
+
 
 #include <RE/Skyrim.h>
 #include <SKSE/SKSE.h>
@@ -141,8 +143,8 @@
 #include "Plugin.h"
 
 #include "Impl/Enums.h"
-
-
+#include "ClibUtil/utils.hpp"
+#include "MergeMapperPluginAPI.h"
 namespace AVG
 {
     using namespace RGL_NAMESPACE;
@@ -171,5 +173,5 @@ namespace util {
 #define RELOCATION_OFFSET(SE, AE, ...) (ptrdiff_t)REL::VariantOffset(SE, AE, SE).offset()
 
 //Move these eventually pls.
-inline LEX::IScript* commons = nullptr;
+inline LEX::IScript* avg = nullptr;
 inline LEX::IScript* legacy = nullptr;

@@ -13,11 +13,11 @@
 #include "ExtraValue.h"
 
 #include "FileParser.h"
-
+#include "Resources.h"
 #include "LegacyFunctions.h"
 #include "Legacy/LegacySerializer.h"
 //#include "Tome.hpp"
-
+//#include "winerror.h"
 using namespace RE::BSScript;
 using namespace AVG;
 using namespace SKSE;
@@ -110,11 +110,93 @@ namespace {
 
     
 
+	bool CompareVersion(const std::string_view& name, const FileView& expect, REL::Version current, bool is_fatal)
+	{
+		if (expect)
+		{
+			try
+			{
+				REL::Version version{ expect.value_or("") };
+
+				if (current < version) {
+					logger::error("Expected current version of {} to be {} but was {}.", name, version.string("."), current.string("."));
+					if (is_fatal) {
+						SKSE::stl::report_and_fail("Parsing error occured, consult the logs.");
+					}
+				}
+
+			}
+			catch (std::invalid_argument& error)
+			{
+				logger::error("error translating {} version string to number: {}", name, error.what());
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	static bool LoadFile(const std::string a_path, bool is_legacy)
 	{
 		try {
             //I wonder if this closes.
 			const auto table = toml::parse_file(a_path);
+
+
+			if (auto entry = table["requires"]; entry.is_table())
+			{
+				auto& reqs = *entry.as_table();
+
+				bool is_fatal = isInDebug || reqs["critical"].value_or(false);
+
+				if (CompareVersion(SKSE::GetPluginName(), reqs["version"], SKSE::GetPluginVersion(), is_fatal) == false) {
+					return false;
+				}
+
+				if (auto entry = reqs["lexicon"]; entry.is_table())
+				{
+					auto& lex_table = *entry.as_table();
+
+					auto lex_version = REL::Version{ std::bit_cast<std::array<uint16_t, 4>>(LEX::InterfaceManager::GetVersion()) };
+					std::swap(lex_version[0], lex_version[3]);
+					std::swap(lex_version[1], lex_version[2]);
+					
+					if (CompareVersion("LexiconSKSE", lex_table["version"], lex_version, is_fatal) == false) {
+						return false;
+					}
+
+					if (auto entry = lex_table["scripts"]; entry.is_array())
+					{
+						auto& array = *entry.as_array();
+
+						for (auto& entry : array)
+						{
+							if (entry.is_string()) {
+								std::string_view path = entry.value_or(""sv);
+
+								if (LEX::ProjectManager::instance->GetScriptFromPath(path) == nullptr) {
+									logger::error("Required script at path {} missing.", path);
+
+									if (is_fatal) {
+										SKSE::stl::report_and_fail("Parsing error occured, consult the logs.");
+									}
+
+									return false;
+								}
+							}
+						}
+					}
+
+
+
+				}
+				
+
+
+
+
+				
+			}
 
 			if (is_legacy)
 			{
@@ -192,16 +274,12 @@ namespace {
 					});
 
 				for (auto [key, entry] : order) {
-					std::string name = key->data();  //This may not be null terminated, may want to switch over to string views at some point.
-					logger::info("Starting: {}-------------", name);
-					HandleFileInput(name, *entry, is_legacy);
+					HandleFileInput(key->data(), *entry, is_legacy);
 				}
 			}
 			else {
 				for (auto& [key, entry] : table) {
-					std::string name = key.data();  //This may not be null terminated, may want to switch over to string views at some point.
-					logger::info("Starting: {}-------------", name);
-					HandleFileInput(name, entry, is_legacy);
+					HandleFileInput(key.data(), entry, is_legacy);
 				}
 			}
 			
@@ -338,87 +416,110 @@ namespace {
 
 
 
+	using GetAVDelegate = float(*)(std::string_view, std::span<RE::ACTOR_VALUE_MODIFIER>, RE::Actor*);
+	using SetAVDelegate = void(*)(std::string_view, RE::ACTOR_VALUE_MODIFIER, RE::Actor*, RE::Actor*, float, float);
+
+
 
 	void InitializeLexiconMessaging()
 	{
-		
+
+
 		using LEX::LinkFlag;
 
 		//If I can, I'd like to make an initialize script based around this.
 		if (!LEX::LinkMessenger::instance->RegisterForLink([](LinkFlag flag) {
-			InvokeOrExit([flag]()
-			{
-				switch (flag) {
-					// Skyrim lifecycle events.
-				case LinkFlag::Loaded: // Called after all plugins have finished running SKSEPlugin_Load.
-					FormExtraValueHandler::Register();
-					//ArithmeticAPI::RequestInterface();
-					//ActorValueGeneratorAPI::RequestInterface();
-					{
+			if (InvokeOrExit([flag]()
+				{
+					using namespace LEX;
 
-						logger::info("Starting...");
-						LEX::IProject* avg = nullptr;
-
-						if (LEX::ProjectManager::instance->CreateProject("ActorValueGenerator", nullptr, avg) != LEX::APIResult::Success)
+					switch (flag) {
+						// Skyrim lifecycle events.
+					case LinkFlag::Loaded: // Called after all plugins have finished running SKSEPlugin_Load.
+						FormExtraValueHandler::Register();
+						//ArithmeticAPI::RequestInterface();
+						//ActorValueGeneratorAPI::RequestInterface();
 						{
-							logger::info("AVG has experienced failure");
-						}
 
-						commons = avg->GetCommons();
+							logger::info("Starting...");
+							LEX::IProject* shared = LEX::ProjectManager::instance->GetShared();
 
-						if (avg) {
-							//IProject* project, std::string_view name, std::string_view path, std::string_view content, IScript*& out, std::span<std::string_view> options = {}
-							//if (LEX::ProjectManager::instance->CreateScript(avg, "__Legacy__", "", "", &legacy, std::vector<std::string_view>{"incremental"}) != LEX::APIResult::Success) {
 							std::vector<std::string_view>incremental{ "incremental" };
-							if (LEX::ProjectManager::instance->CreateScript(avg, "__Legacy__", "", "", legacy, incremental) != LEX::APIResult::Success) {
-								logger::info("ETU* Legacy has failured to create");
+
+
+
+							if constexpr (0)
+							{
+								if (LEX::ProjectManager::instance->CreateScript(shared, "__Legacy__", "", "", legacy, incremental) != LEX::APIResult::Success) {
+									logger::error("Failed to create legacy script");
+								}
+
+								if (avg = LEX::ProjectManager::instance->GetScriptFromPath("Shared::AVG"); !avg)
+								{
+									logger::error("Failed to find AVG script");
+								}
 							}
+							else
+							{
+								LEX::IProject* shared = LEX::ProjectManager::instance->GetShared();
+
+
+								assert_if(!shared) {
+									report::fault::error("Failed to find Lexicon project Shared");
+								}
+
+								avg = shared->FindScript("AVG");
+								
+								assert_if(!shared) {
+									report::fault::error("Failed to find Lexicon script Shared::AVG");
+								}
+
+								LEX::ISubdirectory* subdir = shared->FindSubdirectory("AVG");
+
+								assert_if(!subdir) {
+									report::fault::error("Failed to find Lexicon subproject Shared::AVG");
+								}
+
+								legacy = subdir->CreateEmptyScript("__Legacy__");
+
+
+								assert_if(!legacy) {
+									report::fault::error("Failed to create Lexicon script at subdirectory Shared::AVG");
+								}
+							}
+
+
+							logger::info("Ending?... {} {}", !!avg, !!legacy);
 						}
-
-						logger::info("Ending?... {} {}", !!avg, !!legacy);
-					}
-					break;
+						break;
 
 
-				case LinkFlag::Definition: // Called when all game data has been found.
-					PersonalLoad();
-					break;
+					case LinkFlag::Definition: // Called when all game data has been found.
+						PersonalLoad();
+						break;
+						
+					case LinkFlag::Object: // All ESM/ESL/ESP plugins have loaded, main menu is now active.
+						FormExtraValueHandler::Initialize();
+						InitializeHooking();
 
-				case LinkFlag::External: // All ESM/ESL/ESP plugins have loaded, main menu is now active.
-					if (legacy->AppendContent("int test_legacy = 69;") == false)
-					{
-						logger::info("ETU* failure");
-					}
-					else {
-						logger::info("ETU* legacy >> {}", LEX::Formula<int>::Run("test_legacy * 1", legacy, 420));
-					}
-
-
-					FormExtraValueHandler::Initialize();
-					InitializeHooking();
-					{
-						//auto testForm = LEX::Formula<float(RE::Actor::*)()>::Create("30 + (HasKeyword(props::PlayerKeyword) * 20) + GetActorValue2('StrengthAdaptive', props::All)");
-
-						//auto value = testForm(RE::PlayerCharacter::GetSingleton());
-
-						commons = LEX::ProjectManager::instance->GetScriptFromPath("ActorValueGenerator::Commons");
-						//legacy = LEX::ProjectManager::instance->GetScriptFromPath("ActorValueGenerator::Commons");
-
-						logger::info("Project {}", LEX::Formula<float>::Run("GetPlayer().ProjectTest()", commons));
-
-
+						break;
 
 					}
+				}))
+			{
+				auto name = GetModuleName();
+				std::string str = std::format("An unhandled exception has been encountered when interpreting {} message. Please check plugin log for more info.",
+					magic_enum::enum_name(flag));
 
-					break;
-
-				}
-			});
+				MessageBoxA(NULL, str.c_str(), name.c_str(), MB_OK);
+			}
 
 			})) {
 			stl::report_and_fail("Unable to register Lexicon linkage messenger.");
 			throw nullptr;
 		}
+
+		
 	}
 
 
@@ -461,6 +562,7 @@ namespace {
 
 SKSEPluginLoad(const LoadInterface* skse) {
 #ifdef _DEBUG
+	isInDebug = true;
 	//Need a way to only have this happen when holding down a key
 	if (GetKeyState(VK_RCONTROL) & 0x800) {
 		constexpr auto text1 = L"Request for debugger detected. If you wish to attach one and press Ok, do so now if not please press Cancel.";
@@ -475,6 +577,11 @@ SKSEPluginLoad(const LoadInterface* skse) {
 		} 
 		while (!IsDebuggerPresent() && input != IDCANCEL);
 	}
+#else
+	if (GetKeyState(VK_RCONTROL) & 0x800)
+	{
+		isInDebug = true;
+	}
 #endif
 	
 	InitializeLogging();
@@ -484,7 +591,15 @@ SKSEPluginLoad(const LoadInterface* skse) {
 	
     log::info("{} {} is loading...", plugin->GetName(), version);
 	
+	LEX::InterfaceManager::AddVersionCheck([](uintptr_t server, uintptr_t client) -> LEX::Update
+		{
+			if (server <= REL::Version{ 0, 1, 1, 11 }) {
+				return LEX::Update::Engine;
+			}
 
+			return LEX::Update::Match;
+		}
+	);
 
     Init(skse, false);
 	

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "ExtraValueInfo.h"
+#include "string.h"
 
 namespace AVG
 {
@@ -172,6 +173,12 @@ namespace AVG
 	inline AliasMask globalMask[MaskType::kTotal];
 	constexpr size_t sizef = sizeof(globalMask);
 
+	struct AliasParams
+	{
+		UnionValue alias;
+		std::span<MaskType> types;
+	};
+
 	struct AliasSetting
 	{
 		AliasMask localMask[MaskType::kLast];
@@ -247,6 +254,39 @@ namespace AVG
 
 			return true;
 		}
+
+		bool IsAliasValidSafe(uint8_t alias, std::span<const MaskType> types)
+		{
+			if (!this)
+				return false;
+
+			for (auto type : types)
+			{
+				if (localMask[type].test(alias) == false) {
+					return false;
+				}
+			}
+
+
+			return true;
+		}
+
+		bool IsAliasValidSafe(AliasParams& params)
+		{
+			if (!this)
+				return false;
+
+			for (auto type : params.types)
+			{
+				if (localMask[type].test(params.alias) == false) {
+					return false;
+				}
+			}
+
+
+			return true;
+		}
+
 	};
 
 
@@ -258,11 +298,11 @@ namespace AVG
 		_begin = -1,
 
 		//Note for ID related stuff I only need to preserve the ID of stuff I can actually change. Granted, that's a lot.
-		//ExactID,
-		//Prefix,
-		//Suffix,
-		//Contains,
-		//List,
+		ExactForm,
+		ExactID,
+		Match,
+		Contains,
+		List,
 		
 		Keyword,
 		Plugin,
@@ -271,37 +311,446 @@ namespace AVG
 		Start = AliasSet::_begin + 1,
 	};
 
-	inline std::map<std::string, AliasSetting> aliasMap[AliasSet::Total];
+	//inline std::map<std::string, AliasSetting> aliasMap[AliasSet::Total];
+
+	struct IAliasMapper
+	{
+		//evals if it can be added
+		virtual AliasSetting& Obtain(const std::string& str) = 0;
+
+		virtual AliasSetting* Find(RE::TESForm* form, const std::string& str, AliasParams* params) = 0;
+		//Should have a kind of add function
+	};
+
+
+	static constexpr std::string_view affixChars = "...";
+	static constexpr size_t affixLength = affixChars.size();
+
+
+	struct ContainsID
+	{
+		enum Enum
+		{
+			kPrefix,
+			kSuffix, 
+			kContains,
+		};
+		std::string text;
+
+		ContainsID() = default;
+		ContainsID(const std::string& str) : text{ str } {}
+		
+
+		bool Match(std::string_view view)
+		{
+			return view.contains(text);
+		}
+	};
+
+	struct MatchID : public ContainsID
+	{
+		MatchID(const std::string& str)
+		{
+			if (str.starts_with(affixChars) == true) {
+				text = str.substr(affixLength);
+				type = Enum::kSuffix;
+			}
+			else if (str.ends_with(affixChars) == true) {
+				text = str.substr(0, str.size() - affixLength);
+				type = Enum::kPrefix;
+			}
+			else {
+				//This shouldn't happen
+				text = str;
+				type = Enum::kContains;
+			}
+		}
+
+		Enum type{};
+
+		bool Match(std::string_view view)
+		{
+			switch (type)
+			{
+			case Enum::kPrefix:
+				return view.size() > text.size() && view.find(text) == 0;
+
+			case Enum::kSuffix:
+				return view.size() > text.size() && view.find(text) == (view.size() - text.size());
+		
+			case Enum::kContains: 
+				return __super::Match(view);
+		
+			default:
+				return false;
+			}
+
+			return view.contains(text);
+		}
+	};
+
+
+	template <std::derived_from<ContainsID> Key>
+	struct EditorIDAliasMap : public IAliasMapper
+	{
+		std::vector<std::pair<Key, AliasSetting>> data;
+
+
+		AliasSetting& Obtain(const std::string& str) override
+		{
+			auto& setting = data.emplace_back(Key{ str }, AliasSetting{});
+
+			return setting.second;
+		}
+
+
+
+		AliasSetting* Find(RE::TESForm* form, const std::string& str, AliasParams* params) override
+		{
+			for (auto& [id, setting] : data)
+			{
+				if (id.Match(str) == true)
+					if (!params || setting.IsAliasValidSafe(params->alias, params->types))
+						return &setting;
+			}
+
+			return nullptr;
+		}
+
+	};
+
+	using ContainsIDAliasMap = EditorIDAliasMap<ContainsID>;
+	using MatchIDAliasMap = EditorIDAliasMap<MatchID>;
+
+
+	struct IFormStringAliasMap : public IAliasMapper
+	{
+		using FormStringMap = std::map<std::string, AliasSetting>;
+
+
+		bool _init = false;
+		FormStringMap _stringData;
+
+		
+
+
+		AliasSetting& Obtain(const std::string& str) override
+		{
+			return _stringData[str];
+		}
+
+		virtual void Initialize() = 0;
+
+
+		void InitImpl()
+		{
+			if (!_init) {
+				
+				Initialize();
+				_stringData.clear();
+			}
+		}
+	};
+	
+
+	struct FormAliasMap : public IFormStringAliasMap
+	{
+
+
+		std::map<RE::TESForm*, AliasSetting> data;
+		
+		void Initialize() override
+		{
+			for (auto& [key, setting] : _stringData)
+			{
+				try
+				{
+					RE::TESForm* form = GetForm(key);
+
+					if (form) {
+						data[form] = std::move(setting);
+					}
+					else {
+						logger::error("Failed to find alias target: {}", key);
+					}
+				}
+				catch (std::invalid_argument& error)
+				{
+					logger::error("Invalid form string: {}", key);
+				}
+				//else message
+
+				
+			}
+		}
 
 
 
 
-	inline AliasSetting* GetPluginAlias(RE::TESFile* plugin)
+		AliasSetting& Obtain(const std::string& str) override
+		{
+			return _stringData[str];
+		}
+
+		AliasSetting* Find(RE::TESForm* form, const std::string& str, AliasParams* params) override
+		{
+			InitImpl();
+
+			auto it = data.find(form);
+			
+			if (data.end() == it) {
+				return nullptr;
+			}
+			
+			auto result = &it->second;
+
+			if (params && result->IsAliasValidSafe(params->alias, params->types) == false){
+				return nullptr;
+			}
+			return result;
+		}
+
+
+	};
+
+	struct FormListAliasMap : public IFormStringAliasMap
+	{
+
+
+		std::vector<std::pair<RE::BGSListForm*, AliasSetting>> data;
+		
+
+		void Initialize()
+		{
+			data.reserve(_stringData.size());
+
+			for (auto& [key, setting] : _stringData)
+			{
+				try
+				{
+					RE::BGSListForm* form = GetForm<RE::BGSListForm>(key);
+
+					if (form) {
+						data.emplace_back(form, std::move(setting));
+					}
+					else {
+						logger::error("Failed to find Formlist target: {}", key);
+					}
+				}
+				catch (std::invalid_argument& error)
+				{
+					logger::error("Invalid form string: {}", key);
+				}
+				
+			}
+			
+		}
+
+
+		AliasSetting* Find(RE::TESForm* form, const std::string& str, AliasParams* params) override
+		{
+			InitImpl();
+
+			for (auto& [list, setting] : data)
+			{
+				if (!list)
+					continue;
+
+
+				auto it = std::find(list->forms.begin(), list->forms.end(), form);
+				
+				if (list->forms.end() == it) {
+					continue;
+				}
+
+				if (params && setting.IsAliasValidSafe(params->alias, params->types) == false) {
+					continue;
+				}
+
+				return &setting;
+			}
+
+			return nullptr;
+		}
+
+	};
+
+	struct StringAliasMap : public IAliasMapper
+	{
+		std::map<std::string, AliasSetting> data;
+
+		AliasSetting& Obtain(const std::string& str) override
+		{
+			return data[str];
+			
+		}
+
+		AliasSetting* Find(RE::TESForm* form, const std::string& view, AliasParams* params) override
+		{
+			auto it = data.find(view);
+
+			if (data.end() == it)
+				return nullptr;
+			
+			AliasSetting* setting = &(it->second);
+			
+			return !params || setting->IsAliasValidSafe(params->alias, params->types) ? setting : nullptr;
+
+		}
+	};
+
+
+	struct AliasMap
+
+	{
+		//Put this in a struct maybe?
+		inline static FormAliasMap exactFormAliasMap;
+		inline static StringAliasMap exactIdAliasMap;
+		inline static MatchIDAliasMap matchIDAliasMap;
+		inline static ContainsIDAliasMap containsIDAliasMap;
+		inline static FormListAliasMap formListAliasMap;
+		inline static StringAliasMap keywordAliasMap;
+		inline static StringAliasMap pluginAliasMap;
+
+		inline static std::array<IAliasMapper*, AliasSet::Total> aliasMap;
+		
+
+		static void CheckInit()
+		{
+			if (aliasMap[0] == nullptr)
+			{
+				aliasMap[AliasSet::ExactForm] = &exactFormAliasMap;
+				aliasMap[AliasSet::ExactID] = &exactIdAliasMap;
+				aliasMap[AliasSet::Match] = &matchIDAliasMap;
+				aliasMap[AliasSet::Contains] = &containsIDAliasMap;
+				aliasMap[AliasSet::List] = &formListAliasMap;
+				aliasMap[AliasSet::Keyword] = &keywordAliasMap;
+				aliasMap[AliasSet::Plugin] = &pluginAliasMap;
+			}
+
+		}
+
+		static AliasSet GetSetFromString(std::string& str)
+		{
+			
+			if (int i = str.starts_with('|') + str.ends_with('|'); i)
+			{
+				if (i == 2) {
+					str = str.substr(1, str.size() - 2);
+					return AliasSet::List;//formlist
+				}
+			}
+			else if (int i = str.starts_with('<') + str.ends_with('>'); i) {
+				if (i == 2) {
+					str = str.substr(1, str.size() - 2);
+
+					if (int i = str.starts_with(affixChars) + str.ends_with(affixChars); i) {
+						if (i == 2) {
+							str = str.substr(affixLength, str.size() - affixLength * 2);
+							return AliasSet::Contains;//contains
+						}
+						else{
+							return AliasSet::Match;//prefix/suffix
+
+						}
+					}
+					else {
+						return AliasSet::ExactID;//exact
+					}
+				}
+
+			}
+			else if (auto it = str.find("::"); it != std::string::npos) {
+				if (it == 0) {
+					str = str.substr(2);
+				}
+				
+				return AliasSet::ExactForm;//exact form
+			}
+			else if (str.contains(".es") == true) {
+				return AliasSet::Keyword;
+			}
+			else {
+				return AliasSet::Keyword;//keyword
+			}
+
+			return AliasSet::Total;
+		}
+
+
+		static AliasSetting* ObtainSetting(std::string text, AliasSet* out = nullptr)
+		{
+
+			CheckInit();
+
+			AliasSet set = GetSetFromString(text);
+
+			if (out) {
+				*out = set;
+			}
+
+			if (set == AliasSet::Total) {
+				return nullptr;
+			}
+
+			return &aliasMap[set]->Obtain(text);
+
+		}
+
+		inline static AliasSetting* ObtainSetting(std::string text, AliasSet& out)
+		{
+			return ObtainSetting(std::move(text), &out);
+		}
+		static IAliasMapper& GetAliasMap(AliasSet set)
+		{
+			//rename this
+
+			CheckInit();
+
+			return *aliasMap[set];
+		}
+	};
+	
+
+	
+
+	//~~~
+	
+	//ExactID,
+	//Prefix,
+	//Suffix,
+	//Contains,
+	//List,
+
+	//Keyword,
+	//Plugin,
+	
+
+
+
+	//inline std::tuple<int> aliasTuple{};
+	//static_assert(std::tuple_size_v<decltype(aliasTuple)> == AliasSet::Total);
+
+
+	inline AliasSetting* GetPluginAlias(RE::TESFile* plugin, AliasParams* params)
 	{
 		if (!plugin)
 			return nullptr;
 
-		//From here, til the contains, make that a function.
 		std::string file_name(plugin->GetFilename());
 
-		//Use find at a later point, more effecient 
+		auto& alias_map = AliasMap::GetAliasMap(AliasSet::Plugin);
 
-		auto& pluginAliasMap = aliasMap[AliasSet::Plugin];
-
-
-		if (pluginAliasMap.contains(file_name) == true)
-		{
-			AliasSetting& node = pluginAliasMap[file_name];
-
-			//node.plugin = plugin;
-
-			return &node;
-
-
-		}
-
-		return nullptr;
+		return alias_map.Find(nullptr, file_name, params);
+		
 	}
+
+
+	inline AliasSetting* GetPluginAlias(RE::TESFile* plugin, AliasParams& params)
+	{
+		return GetPluginAlias(plugin, &params);
+	}
+
 
 
 	inline bool FileIsMasterToFile(RE::TESFile* master, RE::TESFile* student)
@@ -384,15 +833,260 @@ namespace AVG
 	//*/
 
 
-	inline AliasData* GetDataFromSet(RE::TESForm* form, uint8_t value, AliasSet set, const MaskType* masks, size_t a_size)
+
+	//*
+	enum AliasPriority : uint8_t
 	{
+		SourceMaster,
+		Source,
+		SourceChild,
+		LastMaster,
+		Last,
+		CurrentMaster,
+		Current,
+		Total
+		//Excluded = 1 << 7
+	};
+
+
+	namespace
+	{
+		AliasSetting* GetMaster(RE::TESFile* target, AliasParams* params)
+		{
+			AliasSetting* result = nullptr;
+
+			auto size = target->masterCount;
+
+			for (int i = 0; i < size; i++)
+			{
+				RE::TESFile* file = target->masterPtrs[i];
+
+				if (auto setting = GetPluginAlias(file, params)) {
+					result = setting;
+					break;
+				}
+			}
+
+
+			return result;
+		}
+
+		void LoadPrimary(RE::TESFileArray* source_array, AliasParams& params)
+		{
+			std::array<AliasSetting*, AliasPriority::Total> aliases{};
+
+			if (!source_array)
+				return;
+
+
+			RE::TESFile** sourceFiles = source_array->data();
+			int end = source_array->size() - 1;
+
+			RE::TESFile* current = sourceFiles[0];
+			RE::TESFile* source = sourceFiles[end];
+			RE::TESFile* last = nullptr;
+
+
+			if (AliasSetting* node = GetPluginAlias(source, &params)) {
+				aliases[AliasPriority::Source] = node;
+			}
+
+			for (int i = 0; i <= end; i++)
+			{
+				//I would like this to have 2 mods one where last hasn't been found, and one where it has been found
+				// but hierarchy is being searched. Because currently, if something that branches form source 
+				// overrides that won't count.
+
+				if (i == end) {
+					aliases[AliasPriority::Last] = aliases[AliasPriority::Source];
+					last = source;
+					break;
+				}
+
+				last = sourceFiles[i];
+
+				if (AliasSetting* node = GetPluginAlias(last, &params)) {
+					aliases[AliasPriority::Last] = node;
+					break;
+				}
+			}
+
+
+			bool useLast = false;
+			
+			//Last may have a setting that rids this of it
+			if (FileIsMasterToFile(last, current) == true) {
+				useLast = true;
+			}
+
+
+			if (last == current) {
+				aliases[AliasPriority::Current] = aliases[AliasPriority::Last];
+				//return; static_assert(false);
+			}
+			
+
+
+
+			if (AliasSetting* node = GetPluginAlias(current, nullptr); node) {
+				if (node->IsAliasValidSafe(params.alias, params.types) == true) {
+					aliases[AliasPriority::Current] = node;
+				}
+			}
+
+
+			else {
+				//If you are a child of one of the last.
+
+				//If one is a child of both, whichever is lower should go first. So, last.
+				bool is_source = false;
+
+				for (int i = 0; i < current->masterCount; i++) {
+					if (!is_source && current->masterPtrs[i] == source) {
+						aliases[AliasPriority::Current] = aliases[AliasPriority::Source];
+					}
+					else if (current->masterPtrs[i] == last) {
+						aliases[AliasPriority::Current] = aliases[AliasPriority::Last];
+						break;
+					}
+
+				}
+			}
+		}
+
+	}
+
+	struct AliasPriorityList
+	{
+		std::array<AliasSetting*, AliasPriority::Total> aliases{};
+
+
+		AliasSetting* GetPrimarySetting()
+		{
+			if (aliases[AliasPriority::Current])
+				return aliases[AliasPriority::Current];
+
+			if (aliases[AliasPriority::Last])
+				return aliases[AliasPriority::Last];
+
+			if (aliases[AliasPriority::Source])
+				return aliases[AliasPriority::Source];
+
+			//logger::info("returning no primary.");
+
+			return nullptr;
+
+		}
+
+		AliasPriorityList() = default;
+
+		void LoadPrimary(RE::TESFileArray* source_array, AliasParams& params)
+		{
+			if (!source_array)
+				return;
+
+
+			RE::TESFile** sourceFiles = source_array->data();
+			int end = source_array->size() - 1;
+
+			RE::TESFile* current = sourceFiles[0];
+			RE::TESFile* source = sourceFiles[end];
+			RE::TESFile* last = nullptr;
+
+
+			if (AliasSetting* node = GetPluginAlias(source, params)) {
+				aliases[AliasPriority::Source] = node;
+			}
+
+			for (int i = 0; i <= end; i++)
+			{
+				//I would like this to have 2 mods one where last hasn't been found, and one where it has been found
+				// but hierarchy is being searched. Because currently, if something that branches form source 
+				// overrides that won't count.
+
+				if (i == end) {
+					aliases[AliasPriority::Last] = aliases[AliasPriority::Source];
+					last = source;
+					break;
+				}
+
+				last = sourceFiles[i];
+
+				if (AliasSetting* node = GetPluginAlias(last, params)) {
+					aliases[AliasPriority::Last] = node;
+					break;
+				}
+			}
+
+
+			if (last == current) {
+				aliases[AliasPriority::Current] = aliases[AliasPriority::Last];
+				return;
+			}
+
+			if (AliasSetting* node = GetPluginAlias(current, nullptr); node) {
+				if (node->IsAliasValidSafe(params) == true) {
+					aliases[AliasPriority::Current] = node;
+				}
+			}
+			else {
+				//If you are a child of one of the last.
+
+				//If one is a child of both, whichever is lower should go first. So, last.
+				bool is_source = false;
+
+				for (int i = 0; i < current->masterCount; i++) {
+					if (!is_source && current->masterPtrs[i] == source) {
+						aliases[AliasPriority::Current] = aliases[AliasPriority::Source];
+					}
+					else if (current->masterPtrs[i] == last) {
+						aliases[AliasPriority::Current] = aliases[AliasPriority::Last];
+						break;
+					}
+
+				}
+			}
+		}
+
+	};
+
+
+	inline AliasSetting* GetSettingFromPriority(RE::TESFileArray* source_array, AliasParams& params)
+	{
+		AliasPriorityList list{};
+		list.LoadPrimary(source_array, params);
+		return list.GetPrimarySetting();
+	}
+	//*/
+
+
+	inline AliasData* GetDataFromSet(RE::TESForm* form, AliasSet set, AliasParams& params)
+	{
+
+		auto& alias_map = AliasMap::GetAliasMap(set);
+
 		switch (set)
 		{
 		default:
 			logger::critical("Cannot use.");
 			throw nullptr;
 
-			
+		case AliasSet::List:
+		case AliasSet::ExactForm: {
+			if (AliasSetting* setting = alias_map.Find(form, "", &params))
+				return &setting->nodes[params.alias];
+
+			break;
+		}
+		case AliasSet::ExactID:
+		case AliasSet::Contains:
+		case AliasSet::Match: {
+			if (AliasSetting* setting = alias_map.Find(form, clib_util::editorID::get_editorID(form), &params))
+				return &setting->nodes[params.alias];
+
+			break;
+		}
+
 		case AliasSet::Keyword:
 		{
 			RE::BGSKeywordForm* keyword_form = skyrim_cast<RE::BGSKeywordForm*>(form);
@@ -400,24 +1094,14 @@ namespace AVG
 			if (!keyword_form)
 				return nullptr;
 
-			auto& keywordAliasMap = aliasMap[AliasSet::Keyword];
-
 
 			for (int i = 0; i < keyword_form->numKeywords; i++)
 			{
 				RE::BGSKeyword* keyword = *keyword_form->GetKeywordAt(i);
-
-				auto str = keyword->formEditorID.c_str();
-
-				auto it = keywordAliasMap.find(str);
-
-				if (keywordAliasMap.end() == it)
-					continue;
-
-				AliasSetting* setting = &(it->second);
-
-				if (setting->IsAliasValidSafe(value, masks, a_size) == true)
-					return &setting->nodes[value];
+				
+				if (AliasSetting* setting = alias_map.Find(form, keyword->formEditorID.c_str(), &params))
+					return &setting->nodes[params.alias];
+				
 			}
 
 			return nullptr;
@@ -425,6 +1109,11 @@ namespace AVG
 
 		case AliasSet::Plugin:
 		{
+			//*
+			auto result = GetSettingFromPriority(form->sourceFiles.array, params);
+
+			return result ? &result->nodes[params.alias] : nullptr;
+			/*/
 			auto source_array = form->sourceFiles.array;
 
 			if (!source_array)
@@ -480,11 +1169,15 @@ namespace AVG
 
 			}
 
-				return result ? &result->nodes[value] : nullptr;
-			
+			return result ? &result->nodes[value] : nullptr;
+			//*/
+
+			break;
 		}
-		break;
+		
 		}
+
+		return nullptr;
 	}
 
 
@@ -517,6 +1210,7 @@ namespace AVG
 
 
 		std::vector<MaskType> masks{ MaskType::kGet };
+		//std::span<MaskType> test = masks;
 
 		if (settings & QuerySettings::RequiresDamage) {
 			masks.push_back(MaskType::kDamage);
@@ -547,14 +1241,13 @@ namespace AVG
 			return false;
 		}
 
+		if (value > (int)VirtualValue::kTotal) {
+			logger::warn("Stored Actor Value is already above total at  {}", (int)value);
+			return false;
+		}
 
 		for (auto mask : masks)
 		{
-			if (value > (int)VirtualValue::kTotal) {
-				logger::warn("Stored Actor Value is already above total at  {}", (int)value);
-				return false;
-			}
-
 			if (globalMask[mask].test(value) == false) {
 				//logger::debug("Alias for {} not implementing.", (int)alias);
 				return false;
@@ -565,10 +1258,12 @@ namespace AVG
 
 		AliasData* data = nullptr;
 
+		AliasParams params{ value, masks };
+
 		for (AliasSet set = AliasSet::Start; set != AliasSet::Total && !data; set++)
 		{
 			//Later, this needs to take a compiled list of all the exclusions. if I ever get around to doing that.
-			data = GetDataFromSet(form, value, set, masks.data(), masks.size());
+			data = GetDataFromSet(form, set, params);
 		}
 
 		if (!data)

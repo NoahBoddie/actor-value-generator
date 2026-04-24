@@ -33,6 +33,44 @@ namespace AVG::API
 			ExtraValueInfo::AddOnActorValueChanged(func);
 		}
 
+		DelegateResult RegisterAVDelegate(std::string_view name, GetAVDelegate get, SetAVDelegate set) override
+		{
+			ExtraValueInfo* info = ExtraValueInfo::GetValueInfoByName(name);
+
+			if (!info) {
+				return DelegateResult::Nonexistent;
+			}
+
+			FunctionalData* data;
+			switch (info->GetType())
+			{
+			case ExtraValueType::Functional:
+				data = static_cast<FunctionalValueInfo*>(info)->function();
+				break;
+			case ExtraValueType::Exclusive:
+				data = static_cast<ExclusiveValueInfo*>(info)->function();
+				break;
+
+			default:
+				return DelegateResult::Nonfunctional;
+			}
+
+			if (data->IsDelegate() == false) {
+				return DelegateResult::Nondelegate;
+			}
+
+			auto& delegate = data->ObtainDelegate(info);
+
+			if (delegate.get || delegate.set) {
+				return DelegateResult::AlreadyFilled;
+			}
+
+			delegate.get = get;
+			delegate.set = set;
+
+			return DelegateResult::Success;
+		}
+
 	};
 
 
@@ -45,17 +83,11 @@ namespace AVG::API
 
 	extern "C" __declspec(dllexport) void* AVG_RequestInterfaceImpl(Version version)
 	{
+
 		CurrentInterface* result = InferfaceSingleton();
 
-		switch (version)
-		{
-		case Version::Version1:
-			return dynamic_cast<InterfaceVersion1*>(result);
-
-
-		case Version::Version2:
-			return dynamic_cast<InterfaceVersion2*>(result);
-		}
+		if (result && result->GetVersion() >= version)
+			return result;
 
 		return nullptr;
 	}

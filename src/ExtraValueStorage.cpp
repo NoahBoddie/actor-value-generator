@@ -3,8 +3,41 @@
 
 namespace AVG
 {
-	std::map<RE::FormID, ExtraValueStorage>& ExtraValueStorage::_valueTable =
-		TOME::SerialManager::CreateSerializer<ExtraValueStorage::SerialMapClass, PrimaryRecordType::ExtraValueStorage>();
+	using StorageMap = std::map<RE::FormID, ExtraValueStorage>;
+
+	struct ExtraValueStorage::SaveCopyMap
+	{
+		using target_type = StorageMap;
+
+		void operator()(TOME::SerialBuffer& buffer, bool& result, StorageMap& map)
+		{
+			StorageMap copy;
+
+			if (buffer.IsSaving()) {
+				{
+					ExtraValueStorage::ReadLock guard{ ExtraValueStorage::accessLock };
+					copy = map;
+				}
+
+				ExtraValueStorage::SerialMapClass{}(buffer, result, copy);
+			}
+			else{
+				ExtraValueStorage::SerialMapClass{}(buffer, result, copy);
+				{
+					ExtraValueStorage::WriteLock guard{ ExtraValueStorage::accessLock };
+
+					for (auto& pair : copy) {
+						map.insert_or_assign(pair.first, std::move(pair.second));
+					}
+				}
+			}
+		}
+	};
+
+
+	//This now saves a copy and loads the original. I hope this makes it some what faster. If this dead locks on loading I'm going to die.
+	//StorageMap& ExtraValueStorage::_valueTable = TOME::SerialManager::CreateSerializer<ExtraValueStorage::SerialMapClass, PrimaryRecordType::ExtraValueStorage>();
+	StorageMap& ExtraValueStorage::_valueTable = TOME::SerialManager::CreateSerializer<SaveCopyMap, PrimaryRecordType::ExtraValueStorage>();
 
 
 	ExtraValueStorage::ExtraValueStorage(RE::Actor* actor, bool create_default)

@@ -183,6 +183,13 @@ namespace AVG
 			
 		}
 
+		void ClearModifiers()
+		{
+			_prmMod = 0.0f;
+			_tmpMod = 0.0f;
+			_dmgMod = 0.0f;
+		}
+		
 		bool operator==(ExtraValueData& a_rhs) 
 		{ 
 			return a_rhs._base == _base &&
@@ -417,7 +424,7 @@ namespace AVG
 			void operator()(TOME::SerialBuffer& buffer, bool& result, std::pair<RE::FormID, ExtraValueStorage>& entry)
 			{
 
-				WriteLock guard{ accessLock };
+				WriteLock guard{ accessLock };//If a deadlock happens because I remove this I very well may crash the fuck out
 
 				result = buffer.SerializeFormID(entry.first);//Needs to be a particular type of object, serializable formID
 
@@ -449,7 +456,8 @@ namespace AVG
 
 			}
 		};
-
+		
+		struct SaveCopyMap;
 
 		//using EVStorageMap = SerializableMap<SerialFormID, ExtraValueStorage*, SerializeClass, SerializeClass>;
 		//This should NOT be using the LogHandler, instead it should be using something that loads the default data of the second part properly.
@@ -482,6 +490,12 @@ namespace AVG
 		{
 			return ResetStorageImpl(actor, init_default);
 		}
+
+		virtual void ResetSkillsAndAttributes(RE::Actor* actor)
+		{
+
+		}
+
 
 		static StorageView GetStorage(RE::Actor* actor);
 
@@ -646,6 +660,10 @@ namespace AVG
 			}
 		}
 
+		void ClearModifiers(DataID id)
+		{
+			_valueData[id].ClearModifiers();
+		}
 
 		void HandleRecoveryUpdate(RE::Actor* owner, std::pair<DataID, RegenData>& entry, ExtraValueInfo* info, float delta_time)
 		{
@@ -802,30 +820,30 @@ namespace AVG
 			//Lock this function.
 			auto player_storage = GetSingleton();
 
-			if (_playable)
-				return player_storage;
+			if (!_playable)
+			{
 
 
-			auto player = RE::PlayerCharacter::GetSingleton();
+				auto player = RE::PlayerCharacter::GetSingleton();
 
-			//Need to access this while 3d loading isn't present. A new rule has to be established too. As long as a request for a value comes
-			// from an actor, fulfill it.
-			if constexpr(false)
-			if (player->Is3DLoaded() == false) {
-				if (!excuse_unplayable)
-					logger::warn("PlayerStorage requested as playable is not 3DLoaded. Playability required, returning nullptr.");
-				else
-					logger::debug("PlayerStorage requested as playable is not 3DLoaded. Request cannot be met as required.");
-				
+				//Need to access this while 3d loading isn't present. A new rule has to be established too. As long as a request for a value comes
+				// from an actor, fulfill it.
+				if constexpr (false)
+					if (player->Is3DLoaded() == false) {
+						if (!excuse_unplayable)
+							logger::warn("PlayerStorage requested as playable is not 3DLoaded. Playability required, returning nullptr.");
+						else
+							logger::debug("PlayerStorage requested as playable is not 3DLoaded. Request cannot be met as required.");
+
+						//*player_storage = PlayerStorage(true);
+						player_storage->ResetStorage(false);
+
+						return excuse_unplayable ? player_storage : nullptr;
+					}
+
 				//*player_storage = PlayerStorage(true);
-				player_storage->ResetStorage(false);
-
-				return excuse_unplayable ? player_storage : nullptr;
+				player_storage->ResetStorage(true);
 			}
-
-			//*player_storage = PlayerStorage(true);
-			player_storage->ResetStorage(true);
-			
 
 			return player_storage;
 		}
@@ -849,6 +867,8 @@ namespace AVG
 				logger::debug("Making new player storage");
 				//this should just be ResetStorageImpl honestly.
 				ResetStorage(true);
+				initialized = true;
+				_playable = true;
 			}
 			
 			constexpr bool serialize_skill = true;
@@ -973,6 +993,11 @@ namespace AVG
 			ResetStorageImpl(init_default);
 
 			return __super::ResetStorage(actor, init_default);
+		}
+
+		void ResetSkillsAndAttributes(RE::Actor* actor) override
+		{
+
 		}
 
 		void ResetStorage(bool init_default)

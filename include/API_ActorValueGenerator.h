@@ -58,15 +58,29 @@ namespace AVG
 	using ActorValueChange = void(*)(ACTOR_VALUE_CHANGE_PARAMS);
 
 
+	using GetAVDelegate = float(*)(std::string_view, std::span<RE::ACTOR_VALUE_MODIFIER>, RE::Actor*);
+	using SetAVDelegate = void(*)(std::string_view, RE::ACTOR_VALUE_MODIFIER, RE::Actor*, RE::Actor*, float, float);
+
 
 	namespace API
 	{
+		enum struct DelegateResult
+		{
+			Success,
+			Nonexistent,	//The name of the extra value doesn't exist
+			Nonfunctional,	//The extra value isn't a functional value
+			Nondelegate,	//The functional value hasn't been marked as a delegate yet.
+			AlreadyFilled,	//The delegate values are already filled.
+			Unknown,
+
+		};
 		enum Version
 		{
 			Version1,
 			Version2,
+			Version3,
 
-			Current = Version2
+			Current = Version3
 		};
 
 		struct InterfaceVersion1
@@ -112,8 +126,28 @@ namespace AVG
 
 		};
 
+		struct InterfaceVersion3 : public InterfaceVersion2
+		{
+			inline static constexpr auto VERSION = Version::Version3;
 
-		using CurrentInterface = InterfaceVersion2;
+			/// <summary>
+			/// Registers a function to be used as a functional value's formula. Returns false
+			/// </summary>
+			/// <param name="get"></param>
+			/// <param name="set"></param>
+			/// <returns></returns>
+			virtual DelegateResult RegisterAVDelegate(std::string_view name, GetAVDelegate get, SetAVDelegate set = nullptr) = 0;
+
+			/// <summary>
+			/// Processes dynamic form's aliases, will ignore plugin and form list
+			/// </summary>
+			/// <param name="form">form to process</param>
+			/// <returns></returns>
+			virtual int64_t ProcessFormAliases(RE::TESForm* form) { return -1; }
+		};
+
+
+		using CurrentInterface = InterfaceVersion3;
 
 
 
@@ -159,13 +193,14 @@ namespace AVG
 		/// <typeparam name="InterfaceClass">is the class derived from the interface to use.</typeparam>
 		/// <returns>Casts to and returns a specific version of the interface.</returns>
 		template <class InterfaceClass = CurrentInterface>
-		inline  InterfaceClass* RequestInterface()
+		inline  InterfaceClass* RequestInterface(bool required = true)
 		{
 			static InterfaceClass* intfc = nullptr;
 
 			if (!intfc) {
 				intfc = reinterpret_cast<InterfaceClass*>(RequestInterface(InterfaceClass::VERSION));
-				assert(intfc);
+				if (required)
+					assert(intfc);
 			}
 
 			return intfc;
@@ -179,9 +214,9 @@ namespace AVG
 
 		constexpr ExtraValue() = default;
 
-		constexpr ExtraValue(RE::ActorValue a) : _av{ a } {}
+		constexpr ExtraValue(RE::ActorValue a) : _av{ a != RE::ActorValue::kTotal ? a : RE::ActorValue::kNone } {}
 		
-		ExtraValue(std::string_view name) : _av{ RE::GetActorValueIDFromName(name) } {}
+		ExtraValue(std::string_view name) : _name{ name }, _av { RE::ActorValue::kTotal } {}
 		
 		RE::ActorValue Resolve() const
 		{
@@ -195,16 +230,28 @@ namespace AVG
 			return _av;
 		}
 
-
-		constexpr operator RE::ActorValue()
+		RE::ActorValue get() const
 		{
+			if (_av == RE::ActorValue::kTotal) {
+				if (API::RequestInterface(false) == nullptr) {
+					return RE::ActorValue::kNone;
+				}
+				
+				_av = RE::GetActorValueIDFromName(_name);
+			}
 			return _av;
+		}
+
+		operator RE::ActorValue() const
+		{
+			
+			return get();
 		}
 
 		
 	private:
 		mutable RE::ActorValue _av = RE::ActorValue::kNone;
-
+		std::string_view _name;
 	};
 
 

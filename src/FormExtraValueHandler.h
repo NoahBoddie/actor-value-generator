@@ -176,9 +176,9 @@ namespace AVG
 			else IF_FORM(RE::BGSPerk)
 			{
 				using PerkEntryFunction = RE::BGSEntryPointPerkEntry::EntryData::Function;
-					
-				HandleCondition(form->perkConditions, form, successes);
 				
+				HandleCondition(form->perkConditions, form, successes);
+
 				for (auto& entry : form->perkEntries)
 				{
 					if (entry->GetType() != RE::PERK_ENTRY_TYPE::kEntryPoint) {
@@ -186,12 +186,23 @@ namespace AVG
 					}
 
 					RE::BGSEntryPointPerkEntry* entry_point = skyrim_cast<RE::BGSEntryPointPerkEntry*>(entry);
-					//*
+					
 					if (!entry_point) {
 						logger::warn("No entry point in {} at {:08X}", form->GetName(), form->GetFormID());
 						continue;
 					}
-					//*/
+
+					if (auto i = entry_point->entryData.numArgs; !i) {
+						
+						if (entry_point->conditions.size() != i) {
+							logger::error("Entry point for {} at {:08X} has no condition args. If this form is used in game it will crash.",
+								form->GetName(), form->GetFormID());
+							
+							return successes;
+						}
+						continue;
+					}
+					
 					for (auto& condition : entry_point->conditions) {
 						HandleCondition(condition, form, successes);
 					}
@@ -221,6 +232,7 @@ namespace AVG
 					function_data->data1 = static_cast<float>(new_av);
 					
 				}
+				
 			}
 			else IF_FORM(RE::TESFaction)
 			{

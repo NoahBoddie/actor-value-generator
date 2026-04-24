@@ -24,7 +24,7 @@ namespace AVG
 	using FileNode = toml::v3::node;
 
     //Move the enums, and include them in this file. Then, made Types included everywhere.
-	enum ExtraValueInput
+	enum ExtraValueInput : uint8_t
 	{
 		None = 0,
 		Base = 1 << 0,
@@ -32,7 +32,6 @@ namespace AVG
 		Temporary = 1 << 2,
 		Damage = 1 << 3,
 		All = Base | Permanent | Temporary | Damage,
-
 		//Desirable combinations
 		Natural = Base | Permanent,
 		Increase = Permanent | Temporary,

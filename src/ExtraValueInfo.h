@@ -108,6 +108,8 @@ namespace AVG
 	};
 	
 	using ValueFormula = LEX::Formula<float(RE::Actor::*)()>;
+	using GetFormula = ValueFormula;
+	//I'd like to change this to have a few more arguments, something to show the delta, and something to show the modifier in question for forwarding purposes
 	using SetFormula = LEX::Formula<void(RE::Actor::*)(RE::Actor*, float, float)>;
 
 
@@ -382,7 +384,7 @@ namespace AVG
 
 
 
-		static ExtraValueInfo* GetValueInfoByName(std::string name)
+		static ExtraValueInfo* GetValueInfoByName(const std::string_view& name)
 		{
 			auto result = std::find_if(_extraValueList.begin(), _extraValueList.end(), [=](auto it) { return Utility::StrCmpI(it->valueName, name); });
 
@@ -996,76 +998,206 @@ namespace AVG
 
 	struct FunctionalData
 	{
+		enum struct FunctionalType
+		{
+			Invalid,
+			Formula,
+			Delegate,
+		};
 
-		float GetExtraValue(RE::Actor* target, ExtraValueInput value_types = ExtraValueInput::All)
+		struct Formula
+		{
+			ModifierArray<GetFormula>	get{};
+			ModifierArray<SetFormula>	set{};
+		};
+
+
+		struct Delegate
+		{
+			GetAVDelegate get{};
+			SetAVDelegate set{};
+		};
+
+		
+		~FunctionalData()
+		{
+			if (IsFormula() == true)
+			{
+				delete _formula;
+			}
+		}
+
+
+		float GetExtraValue(ExtraValueInfo* info, RE::Actor* target, ExtraValueInput value_types = ExtraValueInput::All)
 		{
 			//Needs to use _get, this also needs to wait for implementation
 
-			if (value_types == ExtraValueInput::None)
-				return 0;
+			float result;
+			
+			switch (GetFunctionalType())
+			{
+			case FunctionalType::Formula: {
+				if (value_types == ExtraValueInput::None)
+					return 0;
 
-			if (!(_getFlags & value_types))
-				return 0;
+				if (!(_getFlags & value_types))
+					return 0;
+
+				auto& get = GetFormula(info).get;
 
 
-			float bas = _get[ActorValueModifier::kTotal] && !!(value_types & ExtraValueInput::Base) ?
-				_get[ActorValueModifier::kTotal](target)->Call() : 0;
+				float bas = get[ActorValueModifier::kTotal] && !!(value_types & ExtraValueInput::Base) ?
+					get[ActorValueModifier::kTotal](target)->Call() : 0;
 
-			float prm = _get[ActorValueModifier::kPermanent] && !!(value_types & ExtraValueInput::Permanent) ?
-				_get[ActorValueModifier::kPermanent](target)->Call() : 0;
+				float prm = get[ActorValueModifier::kPermanent] && !!(value_types & ExtraValueInput::Permanent) ?
+					get[ActorValueModifier::kPermanent](target)->Call() : 0;
 
-			float tmp = _get[ActorValueModifier::kTemporary] && !!(value_types & ExtraValueInput::Temporary) ?
-				_get[ActorValueModifier::kTemporary](target)->Call() : 0;
+				float tmp = get[ActorValueModifier::kTemporary] && !!(value_types & ExtraValueInput::Temporary) ?
+					get[ActorValueModifier::kTemporary](target)->Call() : 0;
 
-			float dmg = _get[ActorValueModifier::kDamage] && !!(value_types & ExtraValueInput::Damage) ?
-				_get[ActorValueModifier::kDamage](target)->Call() : 0;
+				float dmg = get[ActorValueModifier::kDamage] && !!(value_types & ExtraValueInput::Damage) ?
+					get[ActorValueModifier::kDamage](target)->Call() : 0;
 
-			dmg = fmin(dmg, 0);
+				dmg = fmin(dmg, 0);
 
-			//logger::info("{}/{}/{}/{}", bas, prm, tmp, dmg);
+				//logger::info("{}/{}/{}/{}", bas, prm, tmp, dmg);
 
-			return bas + prm + tmp + dmg;
+				result = bas + prm + tmp + dmg;
+				break;
+			}
+
+
+			case FunctionalType::Delegate: {
+				auto& get = GetDelegate(info).get;
+
+				if (!get)
+					return 0.f;
+
+
+				std::vector<RE::ActorValueModifier> mods;
+
+				for (int i = 1; i < ExtraValueInput::All; i <<= 1) {
+					if (i & value_types) {
+						switch (i)
+						{
+						case ExtraValueInput::Base:
+							mods.push_back(RE::ActorValueModifier::kTotal);
+							break;
+						case ExtraValueInput::Damage:
+							mods.push_back(RE::ActorValueModifier::kDamage);
+							break;
+						case ExtraValueInput::Temporary:
+							mods.push_back(RE::ActorValueModifier::kTemporary);
+							break;
+						case ExtraValueInput::Permanent:
+							mods.push_back(RE::ActorValueModifier::kPermanent);
+							break;
+						}
+					}
+				}
+
+				result = get(info->GetName(), mods, target);
+
+				break;
+			}
+
+			default:
+				result = 0;
+				break;
+			}
+
+			return result;
 		}
 
 		bool SetExtraValue(ExtraValueInfo* info, RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier)
 		{
-			if (!_set[modifier])
+			float from;
+
+
+			switch (GetFunctionalType())
+			{
+			case FunctionalType::Formula: {
+				auto& set = GetFormula(info).set[modifier];
+				
+				if (!set)
+					return false;
+
+				from = modifier == RE::ActorValueModifier::kTotal ? NAN : 0;
+				set(target)->Call(nullptr, from, value);
+
+				break;
+			}
+
+
+			case FunctionalType::Delegate: {
+				auto& set = GetDelegate(info).set;
+
+				if (!set)
+					return false;
+
+				from = modifier == RE::ActorValueModifier::kTotal ? NAN : 0;
+				set(info->GetName(), modifier, target, nullptr, from, value);
+
+				break;
+			}
+
+			default:
 				return false;
-
-			//float from = GetExtraValue(target, ModifierToValueInput(modifier));
-			float from = modifier == RE::ActorValueModifier::kTotal ? NAN : 0;
-			
-			_set[modifier](target)->Call(nullptr, from, value);
-
+			}
 
 			//I'm not sure why I changed from here, I guess cause it didn't matter much
 			info->SendOnActorValueChanged(target, nullptr, modifier, from, value);
-			
+
 			return true;
 		}
 
 		bool ModExtraValue(ExtraValueInfo* info, RE::Actor* target, RE::Actor* aggressor, float value, RE::ACTOR_VALUE_MODIFIER modifier)
 		{
+			float current;
 
-			if (!_set[modifier])
-				return false;
 
-			if (value != 0)
+			switch (GetFunctionalType())
 			{
+			case FunctionalType::Formula: {
+				auto& set = GetFormula(info).set[modifier];
+				
+				if (!set)
+					return false;
 
-				float current = GetExtraValue(target, ModifierToValueInput(modifier));
-
-				_set[modifier](target)->Call(aggressor, current, value + current);
-
-				//float new_value = GetExtraValue(target, ModifierToValueInput(modifier));
-				//Functional is loose, so if it mods or sets I'll just always do it.
-
-				info->SendOnActorValueChanged(target, aggressor, modifier, current, value + current);
+				if (value) {
+					current = GetExtraValue(info, target, ModifierToValueInput(modifier));
+					set(target)->Call(aggressor, current, value + current);
+				}
+				break;
 			}
+
+
+			case FunctionalType::Delegate: {
+				auto& set = GetDelegate(info).set;
+
+				if (!set)
+					return false;
+
+				if (value) {
+					current = GetExtraValue(info, target, ModifierToValueInput(modifier));
+					set(info->GetName(), modifier, target, aggressor, current, value + current);
+				}
+
+				break;
+			}
+
+			default:
+				return false;
+			}
+			
+			if (value)
+				info->SendOnActorValueChanged(target, aggressor, modifier, current, value + current);
 
 			return true;
 		}
 
+
+		
 
 
 		ExtraValueInput GetFlags() const { return _getFlags; }
@@ -1080,9 +1212,99 @@ namespace AVG
 
 		ExtraValueInput _getFlags = ExtraValueInput::None;
 		ExtraValueInput _setFlags = ExtraValueInput::None;
+		
+		union
+		{
+			int64_t raw[2]{ -1, -1 };
 
-		ModifierArray<ValueFormula>	_get{};
-		ModifierArray<SetFormula>	_set{};
+			struct
+			{
+				Formula* _formula;
+				uint64_t _check;//If this is equal to -1 then it uses formulas. if it's equal to anythin else it uses delegates.
+			};
+			struct
+			{
+				Delegate _delegate;
+			};
+		};
+
+		FunctionalType GetFunctionalType()
+		{
+			if (raw[0] == -1)
+				return FunctionalType::Invalid;
+			else if (raw[1] == -1)
+				return FunctionalType::Formula;
+			else
+				return FunctionalType::Delegate;
+		}
+
+		bool IsDelegate()
+		{
+			return GetFunctionalType() == FunctionalType::Delegate;
+		}
+
+
+		bool IsFormula()
+		{
+			return GetFunctionalType() == FunctionalType::Formula;
+		}
+
+
+
+		Formula& GetFormula(ExtraValueInfo* info = nullptr)
+		{
+			assert_if(GetFunctionalType() != FunctionalType::Formula) {
+				logger::critical("{} uses delegates and cannot get formulas", info ? info->GetName() : "<no name>");
+				throw std::bad_variant_access();
+			}
+
+			return *_formula;
+		}
+
+		
+		Formula& ObtainFormula(ExtraValueInfo* info = nullptr)
+		{
+			auto type = GetFunctionalType();
+
+			assert_if(type == FunctionalType::Delegate) {
+				logger::critical("{} uses delegates and get or create formulas.", info ? info->GetName() : "<no name>");
+				throw std::bad_variant_access();
+			}
+			else if (type == FunctionalType::Invalid) {
+				_formula = new Formula;
+				_check = -1;
+			}
+
+			return *_formula;
+		}
+
+		Delegate& GetDelegate(ExtraValueInfo* info = nullptr)
+		{
+			assert_if(GetFunctionalType() != FunctionalType::Delegate) {
+				logger::critical("{} uses formulas and cannot get delegates", info ? info->GetName() : "<no name>");
+				throw std::bad_variant_access();
+			}
+
+			return _delegate;
+		}
+
+
+		Delegate& ObtainDelegate(ExtraValueInfo* info = nullptr)
+		{
+			auto type = GetFunctionalType();
+
+			assert_if(type == FunctionalType::Formula) {
+				logger::critical("{} uses formulas and cannot get delegates", info ? info->GetName() : "<no name>");
+				throw std::bad_variant_access();
+			}
+			else if (type == FunctionalType::Invalid) {
+				_delegate.get = nullptr;
+				_delegate.set = nullptr;
+			}
+
+			return _delegate;
+		}
+
 
 
 
@@ -1105,10 +1327,7 @@ namespace AVG
         //void(RE::Actor*, std::string, RE::ActorValueModifier, float);
 
 
-		void HandleSetExport(RE::ACTOR_VALUE_MODIFIER modifier, RE::Actor* target, RE::Actor* cause, float from, float to)
-		{//Rename this
-			_set[modifier](target)->Call(cause, from, to);
-		}
+		
 
 
     public:
@@ -1124,7 +1343,7 @@ namespace AVG
 
         float GetExtraValue(RE::Actor* target, ExtraValueInput value_types = ExtraValueInput::All) override
 		{
-			return function()->GetExtraValue(target, value_types);
+			return function()->GetExtraValue(this, target, value_types);
 		}
 
 		bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
@@ -1137,21 +1356,6 @@ namespace AVG
 			return function()->ModExtraValue(this, target, aggressor, value, modifier);
 		}
 
-
-		bool AddSetFunction__(std::string func, ActorValueModifier mod, std::vector<std::string> context)
-		{
-
-
-
-			_set[mod] = SetFormula::Create("cause", "from", "to", func);
-
-			if (!_set[mod])
-				return false;
-
-			_setFlags |= ModifierToValueInput(mod);
-
-			return true;
-		}
 
 
 		void Included() override
@@ -1184,7 +1388,7 @@ namespace AVG
 			if (target && target->IsPlayerRef() == true)
 				return adapt()->GetExtraValue(this, target, value_types);
 			else
-				return function()->GetExtraValue(target, value_types);
+				return function()->GetExtraValue(this, target, value_types);
 		}
 
 		bool SetExtraValue(RE::Actor* target, float value, RE::ACTOR_VALUE_MODIFIER modifier) override
@@ -1216,52 +1420,6 @@ namespace AVG
 		void Included() override
 		{
 			//logger::info("Functional value {} created. Get: {:04B}, Set: {:04B}", GetName(), (int)_getFlags, (int)_setFlags);
-		}
-
-		void FunctionalValueInfo_(std::string& name, ModifierArray<std::string> get_strings = {}, ModifierArray<std::string> set_strings = {})// : ExtraValueInfo{ name }
-		{
-			//I would like this to have the job if appointing this to a list. It also copies the string given.
-
-			//Make these a function.
-
-			for (ActorValueModifier mod = ActorValueModifier::kPermanent; mod <= ActorValueModifier::kTotal; mod++)
-			{
-				if (get_strings[mod] != "") {
-					logger::debug("making {}", get_strings[mod]);
-					_get[mod] = ValueFormula::Create(get_strings[mod]);
-					_getFlags |= ModifierToValueInput(mod);
-				}
-
-				if (mod == ActorValueModifier::kTotal)
-					break;
-			}
-
-			for (ActorValueModifier mod = ActorValueModifier::kPermanent; mod <= ActorValueModifier::kTotal; mod++)
-			{
-				//For there to be a set there, there must be a coresponding get function
-				if (!(ModifierToValueInput(mod) & _getFlags)) {
-					logger::info("corresponding get function must exist for set function.");
-					continue;
-				}
-
-				//For there to be a set, there must be a get. Note that.
-				if (set_strings[mod] == "")
-					continue;
-
-				_set[mod] = SetFormula::Create("cause", "from", "to", set_strings[mod]);
-
-				_setFlags |= ModifierToValueInput(mod);
-
-
-			}
-
-
-			AddExtraValueInfo(this, ExtraValueType::Functional);
-
-
-			//logger::info("Functional value {} created. Get: {:04B}, Set: {:04B}", name, (int)_getFlags, (int)_setFlags);
-
-			//Should do nothing atm.
 		}
 
 		void LoadFromFile(const FileNode& node, bool legacy) override;

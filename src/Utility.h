@@ -34,17 +34,17 @@ namespace AVG
 		}
 
 		//Reuse this to use numbers instead of just looking for exact value, gives more info that way.
-		static bool CharCmpI(char& c1, char& c2)
+		static bool CharCmpI(char c1, char c2)
 		{
 			//May only have to do one.
 			return c1 == c2 || std::toupper(c1) == std::toupper(c2);
 		}
 
 
-		static bool StrCmpI(std::string str1, std::string str2)
+		static bool StrCmpI(const std::string_view& str1, const std::string_view& str2)
 		{
-			return str1.size() == str2.size() &&
-				std::equal(str1.begin(), str1.end(), str2.begin(), CharCmpI);
+			return str1.size() == str2.size() && stricmp(str1.data(), str2.data()) == 0;
+				//std::equal(str1.begin(), str1.end(), str2.begin(), CharCmpI);
 		}
 
 		inline static RE::ActorValue& GetCostSetting(RE::MagicItem* item, bool right_hand)//RE::MagicSystem::CastingSource source)
@@ -663,6 +663,71 @@ namespace AVG
 #endif
 
 	};
+
+
+
+	inline RE::TESForm* GetForm(const std::string& a_str)
+	{
+		using namespace clib_util;
+		if (const auto splitID = string::split(a_str, "::"); splitID.size() == 2) {
+			const auto  formID = string::to_num<RE::FormID>(splitID[1], true);
+			const auto& modName = splitID[0];
+			if (g_mergeMapperInterface) {
+				const auto [mergedModName, mergedFormID] = g_mergeMapperInterface->GetNewFormID(modName.c_str(), formID);
+				return RE::TESDataHandler::GetSingleton()->LookupForm(mergedFormID, mergedModName);
+			}
+			else {
+				return RE::TESDataHandler::GetSingleton()->LookupForm(formID, modName);
+			}
+		}
+		if (string::is_only_hex(a_str, false)) {
+			auto form = RE::TESForm::LookupByID(string::to_num<RE::FormID>(a_str, true));
+			return form;
+		}
+		if (const auto form = RE::TESForm::LookupByEditorID(a_str)) {
+			return form;
+		}
+		return nullptr;
+	}
+
+
+	template<std::derived_from<RE::TESForm> T>
+	T* GetForm(const std::string& a_str)
+	{
+		auto form = GetForm(a_str);
+
+		return form ? form->As<T>() : nullptr;
+	}
+
+	inline RE::FormID GetFormID(const std::string& a_str)
+	{
+		using namespace clib_util;
+		if (string::is_only_hex(a_str, false)) {
+			const auto formID = string::to_num<RE::FormID>(a_str, true);
+			return formID;
+		}
+		else {
+			auto form = GetForm(a_str);
+			return form ? form->formID : 0;
+		}
+	}
+
+	inline RE::TESForm* GetFormFromString(std::string_view form_string)
+	{
+
+		auto loc = form_string.find("::");
+		if (loc == std::string_view::npos) {
+			return nullptr;
+		}
+
+		auto plugin = form_string.substr(0, loc);
+		auto id_string = form_string.substr(loc + 2);
+
+		static auto handler = RE::TESDataHandler::GetSingleton();
+
+		return handler->LookupForm(std::stoi(std::string{ id_string }, nullptr, 16), plugin);
+
+	}
 }
 
 

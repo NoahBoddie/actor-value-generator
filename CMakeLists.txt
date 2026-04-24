@@ -6,7 +6,7 @@ message("Using toolchain file ${CMAKE_TOOLCHAIN_FILE}.")
 ########################################################################################################################
 project(
         ActorValueGenerator
-        VERSION 2.2.2.3
+        VERSION 2.2.12.0
         DESCRIPTION "An SKSE modding tool that enables users to make new actor values as well as extending their existing functionally."
         LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
@@ -33,6 +33,8 @@ configure_file(
 set(headers
         #I would really like to make this as a sort of dependency instead. But for now.
         include/API_ActorValueGenerator.h
+        src/MergeMapperPluginAPI.h
+
 )
 
 set(sources
@@ -52,8 +54,10 @@ set(sources
       
         
         src/Impl/Enums.h
+        src/MergeMapperPluginAPI.cpp
         src/ExtraNPC.h
         src/Types.h
+        src/Resources.h
         src/LegacyFunctions.h
         src/ExtraValue.h
         src/BGSEntryPointFunctionDataTwoValue.h

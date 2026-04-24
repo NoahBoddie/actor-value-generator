@@ -574,20 +574,20 @@ namespace AVG::Legacy
 		RegisterDump dump;
 
 
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetRandomRange, "ActorValueGenerator::__Legacy__::GetRandomRange");					//01
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetActorValue, "ActorValueGenerator::__Legacy__::GetActorValue");						//02
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetCrimeGold, "ActorValueGenerator::__Legacy__::GetCrimeGold");						//03
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(IsRace, "ActorValueGenerator::__Legacy__::IsRace");									//04
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(IsInFaction, "ActorValueGenerator::__Legacy__::IsInFaction");							//05
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetKeyword, "ActorValueGenerator::__Legacy__::GetKeyword");							//06
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetHasMagicEffect, "ActorValueGenerator::__Legacy__::GetHasMagicEffect");				//07
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetItemCount, "ActorValueGenerator::__Legacy__::GetItemCount");						//08
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetGlobalValueParam, "ActorValueGenerator::__Legacy__::GetGlobalValueParam");			//09
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetKeywordString, "ActorValueGenerator::__Legacy__::GetKeywordString");				//10
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetGameSetting, "ActorValueGenerator::__Legacy__::GetGameSetting");					//11
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(HasPerks, "ActorValueGenerator::__Legacy__::HasPerks");								//12
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetPlayerLevelDistance, "ActorValueGenerator::__Legacy__::GetPlayerLevelDistance");	//13
-		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetLevel, "ActorValueGenerator::__Legacy__::GetLevel");								//14
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetRandomRange, "Shared::AVG::AVG::__Legacy__::GetRandomRange");					//01
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetActorValue, "Shared::AVG::AVG::__Legacy__::GetActorValue");					//02
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetCrimeGold, "Shared::AVG::AVG::__Legacy__::GetCrimeGold");						//03
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(IsRace, "Shared::AVG::AVG::__Legacy__::IsRace");									//04
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(IsInFaction, "Shared::AVG::AVG::__Legacy__::IsInFaction");						//05
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetKeyword, "Shared::AVG::AVG::__Legacy__::GetKeyword");							//06
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetHasMagicEffect, "Shared::AVG::AVG::__Legacy__::GetHasMagicEffect");			//07
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetItemCount, "Shared::AVG::AVG::__Legacy__::GetItemCount");						//08
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetGlobalValueParam, "Shared::AVG::AVG::__Legacy__::GetGlobalValueParam");		//09
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetKeywordString, "Shared::AVG::AVG::__Legacy__::GetKeywordString");				//10
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetGameSetting, "Shared::AVG::AVG::__Legacy__::GetGameSetting");					//11
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(HasPerks, "Shared::AVG::AVG::__Legacy__::HasPerks");								//12
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetPlayerLevelDistance, "Shared::AVG::AVG::__Legacy__::GetPlayerLevelDistance");	//13
+		dump = LEX::ProcedureHandler::instance->RegisterFunction(GetLevel, "Shared::AVG::AVG::__Legacy__::GetLevel");								//14
 	}
 
 }

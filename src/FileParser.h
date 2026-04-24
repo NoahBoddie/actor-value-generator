@@ -22,21 +22,32 @@ namespace AVG
 	{
 		for (auto& [name, list] : includeMap) {
 			
-			auto set = GetAliasSetFromName(name);
 
-			auto& alias_node = aliasMap[set][name];
+			if (name.empty() == true) {
+				logger::warn("Include title is empty");
+				continue;
+			}
+			AliasSet set;
+
+			auto setting = AliasMap::ObtainSetting(name, set);
+
+			if (!setting) {
+				logger::warn("Invalid include title detected: {}", name);
+				continue;
+			}
 
 			for (auto& entry : list)
 			{
-				if (entry == "") {
+				if (entry.empty() == true) {
 					logger::warn("Include entry is empty.");
 					continue;
 				}
 
-				std::vector<std::string> results;
-				
+				std::vector<std::string> results = clib_util::string::split(entry, "=");;
+				//results = boost::split(results, entry, boost::is_any_of("="));
+
 				//This needs to be using regex now.
-				results = boost::split(results, entry, boost::is_any_of("="));
+
 
 				std::string ev_name;
 
@@ -45,11 +56,17 @@ namespace AVG
 				
 				UnionValue alias_value;
 
+				std::string_view alias_name;
+
 				if (results.size() > 1)
 				{
-					boost::trim(results[0]);
-					boost::trim(results[1]);
 
+					//boost::trim(results[0]);
+					//boost::trim(results[1]);
+					clib_util::string::trim(results[0]);
+					clib_util::string::trim(results[1]);
+
+					
 					ev_name = results[0];
 					//std::string left_str = results[1];
 
@@ -59,7 +76,7 @@ namespace AVG
 					//default:
 					//}
 					alias_value = Utility::StringToActorValue(results[1]);
-
+					alias_name = results[1];
 					if (alias_value.GetActorValue() == RE::ActorValue::kTotal) {
 						//Shit is invalid, do not proceed.
 
@@ -72,15 +89,24 @@ namespace AVG
 					}
 
 					if (set == AliasSet::Plugin && alias_value.GetActorValue() == RE::ActorValue::kNone) {
-						logger::warn("None is not a viable alias to use on a plugin.");
-						continue;
+					
+						switch (set)
+						{
+						case AliasSet::Plugin:
+						case AliasSet::Contains:
+						case AliasSet::Match:
+							logger::warn("None is not a viable alias to use on a {} alias type.", magic_enum::enum_name(set));
+							continue;
+						}
+						
+						
 					}
 
 					logger::info("Custom alias for {} detected, using '{}'", results[0], results[1]);
 				}
 				else
 				{
-					ev_name = boost::trim_copy(entry);
+					ev_name = clib_util::string::trim_copy(entry);
 				}
 
 				//Do a split right here with trimming.
@@ -97,6 +123,7 @@ namespace AVG
 				if (alias_value.GetVirtualValue() == VirtualValue::kTotal) {
 					if (Utility::IsValidValue(info->_aliasID) == true) {
 						alias_value = info->_aliasID;
+						alias_name = magic_enum::enum_name(info->GetAliasID());
 					}
 					else {
 						//This shit is invalid
@@ -106,9 +133,9 @@ namespace AVG
 				}
 
 				
-				logger::info("Including {} to {} at {}", ev_name, name, (int)alias_value);
+				logger::info("Including {} to {} at {}({}) as a {}", ev_name, name, alias_name, (int)alias_value, magic_enum::enum_name(set));
 
-				alias_node.AddSetting(alias_value, info, mode);
+				setting->AddSetting(alias_value, info, mode);
 			}
 			//*/
 		}
@@ -451,8 +478,10 @@ namespace AVG
 
 //#define APPEND_SCRIPT_EXISTS
 
-	void HandleFileInput(std::string& name, const FileNode& node, bool is_legacy)
+	void HandleFileInput(const std::string_view& name, const FileNode& node, bool is_legacy)
 	{
+		logger::info("Starting: {}-------------", name);
+
 		//Doesn't work, seems to only get testEV, maybe my choice isn't entirely set up properly?
 
 
@@ -468,6 +497,9 @@ namespace AVG
 			//If it's one of these types. Later, it's basically if it's a reserved name or not.
 			switch (RGL::Hash<RGL::HashFlags::Insensitive>(name))
 			{
+
+			case "Requirements"_ih:
+				return;
 
 			case "Include"_ih:
 				for (auto& [key, list] : table) {
@@ -515,8 +547,10 @@ namespace AVG
 					
 					if (HandleLegacyGlobal(value, property_name) == true) {
 						if (is_legacy) {
-							legacy->AppendContent(value);
-							logger::debug("Legacy property created: {}", value);
+							if (legacy->AppendContent(value) == true)
+								logger::debug("Legacy property created: {}", value);
+							else
+								logger::debug("Failed to create legacy property: {}", value);
 						}
 						else {
 							logger::warn("Properties through AVG no longer supported, use Lexicon scripts instead. Formatted to:\n{}", value);
@@ -525,8 +559,6 @@ namespace AVG
 				}
 				return;
 			}
-
-
 
 			std::string type = table["type"].value_or("Invalid");
 			ExtraValueType ev_type;
@@ -621,7 +653,16 @@ namespace AVG
 			case "Functional"_ih:
 				ev_type = ExtraValueType::Functional;
 
-				create_ev:
+			create_ev:
+
+
+				if (ExtraValueInfo::GetValueInfoByName(name) != nullptr) {
+					logger::error("Extra Value {} already exists", name);
+					SKSE::stl::report_and_fail("critical error detected, address AVG log");
+					return;
+				}
+
+
 				ExtraValueInfo::Create(name, ev_type, table, legacy);
 				break;
 

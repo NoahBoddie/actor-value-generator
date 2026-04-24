@@ -23,7 +23,8 @@
             "boost-regex",
             "magic-enum",
             "boost-multiprecision",
-            "simpleini"
+            "simpleini",
+            "clib-util"
           ]
         },
         "tests": {

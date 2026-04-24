@@ -2,6 +2,7 @@
 #include "ExtraValueStorage.h"
 #include "ValueAliasHandler.h"
 
+#include "Types.h"
 
 namespace AVG
 {
@@ -37,7 +38,9 @@ namespace AVG
 		displayName = table["displayName"].value_or("");
 
 		//Total is now the error alias value.
-		RE::ActorValue alias_value = Utility::StringToActorValue(table["alias"].value_or("Total"));
+
+		std::string alias_name = table["alias"].value_or("Total");
+		RE::ActorValue alias_value = Utility::StringToActorValue(alias_name);
 
 		if (alias_value == RE::ActorValue::kNone)
 			logger::warn("The default alias of '{}' cannot be None. Move to an Include List if this is your intent", GetName());
@@ -59,8 +62,9 @@ namespace AVG
 
 				if (plugin_name != "") {
 					//logger::info("Adding {} to {} at {}", plugin_name, name, alias_value);
-					logger::info("Adding {} to {} at {}", plugin_name, GetName(), (int)alias_value);
-					aliasMap[AliasSet::Plugin][plugin_name].AddSetting(alias_value, this, AliasMode::Inherent);
+					logger::info("Adding {} to {} at {}({})", plugin_name, GetName(), alias_name, (int)alias_value);
+
+					AliasMap::GetAliasMap(AliasSet::Plugin).Obtain(plugin_name).AddSetting(alias_value, this, AliasMode::Inherent);
 				}
 			}
 
@@ -89,7 +93,10 @@ namespace AVG
 		StorageView storage = AllowSoftDefault() ? ExtraValueStorage::GetStorage(target) : ExtraValueStorage::ObtainStorage(target);
 
 		if (!storage) {
+			if (value_types & ExtraValueInput::Base)
 				return GetExtraValueDefault(target);
+			else
+				return 0.f;
 		}
 
 		return storage->GetValue(target, info->GetDataID(), value_types, info);
@@ -251,8 +258,8 @@ namespace AVG
 		if (!no_rec)
 		{
 			auto rec = ObtainRecoverInfo();
-			rec->recoveryDelay = ValueFormula::Create(delay, is_legacy ? legacy : commons);//, "ActorValueGenerator::Commons");
-			rec->recoveryRate = ValueFormula::Create(rate, is_legacy ? legacy : commons);
+			rec->recoveryDelay = ValueFormula::Create(delay, is_legacy ? legacy : avg);//, "ActorValueGenerator::Commons");
+			rec->recoveryRate = ValueFormula::Create(rate, is_legacy ? legacy : avg);
 		}
 
 		if (auto* rec = GetRecoverInfo(); rec && fixed) {
@@ -275,7 +282,7 @@ namespace AVG
 			{
 				auto* default_data = ObtainDefaultInfo();
 
-				default_data->defaultFunction = ValueFormula::Create(update_formula, is_legacy ? legacy : commons);
+				default_data->defaultFunction = ValueFormula::Create(update_formula, is_legacy ? legacy : avg);
 
 
 				std::string default_type = default_table["type"].value_or("Implicit");
@@ -449,123 +456,146 @@ namespace AVG
 
 		auto& table = *node.as_table();
 
-		ModifierArray<std::string> get_strings{};
-		ModifierArray<std::string> set_strings{};
+		if (table["delegate"].value_or(false) == true) {
+			_getFlags |= ExtraValueInput::All;
+			_setFlags |= ExtraValueInput::All;
 
-		auto get_info = table["get"];
-		auto set_info = table["set"];
-
-		auto node_type_G = get_info.type();
-		auto node_type_S = set_info.type();
-
-		using NodeType = decltype(node_type_G);
-
-		bool is_readonly = false;
-
-
-
-		switch (node_type_G)
-		{
-		case NodeType::table:
-		{
-			auto& get_table = *get_info.as_table();
-
-			get_strings[ActorValueModifier::kTotal] = get_table["base"].value_or("");
-			get_strings[ActorValueModifier::kPermanent] = get_table["permanent"].value_or("");
-			get_strings[ActorValueModifier::kTemporary] = get_table["temporary"].value_or("");
-			get_strings[ActorValueModifier::kDamage] = get_table["damage"].value_or("");
-
+			ObtainDelegate();
 		}
-		break;
+		else {
 
-		case NodeType::string:
-		{
-			//Is readonly now.
-			auto& get_string = *get_info.as_string();
+			ModifierArray<std::string> get_strings{};
+			ModifierArray<std::string> set_strings{ "$", "$", "$", "$" };
 
-			get_strings[ActorValueModifier::kTotal] = get_string.get();
+			auto get_info = table["get"];
+			auto set_info = table["set"];
 
-			is_readonly = true;
-		}
-		break;
-		}
+			auto node_type_G = get_info.type();
+			auto node_type_S = set_info.type();
 
-		//Needs to not do stuff if it's readonly (IE there's nothing to check the get values of other modifiers.
-		switch (node_type_S)
-		{
-		case NodeType::table:
-		{
-			auto& set_table = *set_info.as_table();
+			using NodeType = decltype(node_type_G);
 
-			HandleSetNode(set_table["base"], "'base'", set_strings[ActorValueModifier::kTotal], is_legacy);
-			HandleSetNode(set_table["permanent"], "'permanent'", set_strings[ActorValueModifier::kPermanent], is_legacy);
-			HandleSetNode(set_table["temporary"], "'temporary'", set_strings[ActorValueModifier::kTemporary], is_legacy);
-			HandleSetNode(set_table["damage"], "'damage'", set_strings[ActorValueModifier::kDamage], is_legacy);
-		}
-		break;
+			bool is_readonly = false;
 
-		case NodeType::string:
-		{
-			auto& set_string = *set_info.as_string();
 
-			set_strings[ActorValueModifier::kTotal] = set_string.get();
-		}
-		break;
-
-		case NodeType::array:
-			HandleSetNode(set_info, "'base'", set_strings[ActorValueModifier::kTotal], is_legacy);
-			break;
-		}
+			if (table["restrictions"].value_or(true) == false) {
+				_getFlags |= ExtraValueInput::All;
+				_setFlags |= ExtraValueInput::All;
+			}
 
 
 
-		{
-			//I would like this to have the job if appointing this to a list. It also copies the string given.
-
-			//Make these a function.
-			//RGL::Incl::operator++
-
-			for (ActorValueModifier mod = ActorValueModifier::kPermanent; mod <= ActorValueModifier::kTotal; mod++)
+			switch (node_type_G)
 			{
-				if (get_strings[mod] != "") {
-					logger::debug("making {}", get_strings[mod]);
-					if (_get[mod] = ValueFormula::Create(get_strings[mod], is_legacy ? legacy : commons)) {
-						_getFlags |= ModifierToValueInput(mod);
+			case NodeType::table:
+			{
+				auto& get_table = *get_info.as_table();
+
+				get_strings[ActorValueModifier::kTotal] = get_table["base"].value_or("");
+				get_strings[ActorValueModifier::kPermanent] = get_table["permanent"].value_or("");
+				get_strings[ActorValueModifier::kTemporary] = get_table["temporary"].value_or("");
+				get_strings[ActorValueModifier::kDamage] = get_table["damage"].value_or("");
+
+			}
+			break;
+
+			case NodeType::string:
+			{
+				//Is readonly now.
+				auto& get_string = *get_info.as_string();
+
+				get_strings[ActorValueModifier::kTotal] = get_string.get();
+
+				is_readonly = true;
+			}
+			break;
+			}
+
+			//Needs to not do stuff if it's readonly (IE there's nothing to check the get values of other modifiers.
+			switch (node_type_S)
+			{
+
+			case NodeType::table:
+			{
+				auto& set_table = *set_info.as_table();
+
+				HandleSetNode(set_table["base"], "'base'", set_strings[ActorValueModifier::kTotal], is_legacy);
+				HandleSetNode(set_table["permanent"], "'permanent'", set_strings[ActorValueModifier::kPermanent], is_legacy);
+				HandleSetNode(set_table["temporary"], "'temporary'", set_strings[ActorValueModifier::kTemporary], is_legacy);
+				HandleSetNode(set_table["damage"], "'damage'", set_strings[ActorValueModifier::kDamage], is_legacy);
+			}
+			break;
+
+			case NodeType::string:
+			{
+				auto& set_string = *set_info.as_string();
+
+				set_strings[ActorValueModifier::kTotal] = set_string.get();
+			}
+			break;
+
+			case NodeType::array:
+				HandleSetNode(set_info, "'base'", set_strings[ActorValueModifier::kTotal], is_legacy);
+				break;
+			}
+
+
+
+			{
+				//I would like this to have the job if appointing this to a list. It also copies the string given.
+
+				//Make these a function.
+				//RGL::Incl::operator++
+
+				auto& frm = ObtainFormula();
+				auto& get = frm.get;
+				auto& set = frm.set;
+
+				for (ActorValueModifier mod = ActorValueModifier::kPermanent; mod <= ActorValueModifier::kTotal; mod++)
+				{
+					if (get_strings[mod] != "") {
+						logger::debug("making {}", get_strings[mod]);
+						if (get[mod] = ValueFormula::Create(get_strings[mod], is_legacy ? legacy : avg)) {
+							_getFlags |= ModifierToValueInput(mod);
+						}
+						else {
+							auto name = mod == RE::ActorValueModifier::kTotal ? "Base" : magic_enum::enum_name(mod).substr(1);
+							logger::error("Failure to make get formula for {}:\n'{}'", name, get_strings[mod]);
+						}
+					}
+
+					if (mod == ActorValueModifier::kTotal)
+						break;
+				}
+
+				for (ActorValueModifier mod = ActorValueModifier::kPermanent; mod <= ActorValueModifier::kTotal; mod++)
+				{
+					if (set_strings[mod] == "$")
+						continue;
+					if (set_strings[mod] == "") {
+						logger::warn("Set string for modifier {} is empty", magic_enum::enum_name(mod));
+						_setFlags |= ModifierToValueInput(mod);
+						continue;
+					}
+
+					//For there to be a set there, there must be a coresponding get function
+					if (!(ModifierToValueInput(mod) & _getFlags)) {
+						logger::warn("Lacks a coresponding get function for {} modifier", magic_enum::enum_name(ModifierToValueInput(mod)));//state which are in error
+					}
+
+					if (set[mod] = SetFormula::Create("cause", "from", "to", set_strings[mod], is_legacy ? legacy : avg)) {
+						_setFlags |= ModifierToValueInput(mod);
 					}
 					else {
-						auto name = mod == RE::ActorValueModifier::kTotal ? "Base" : magic_enum::enum_name(mod).substr(1);
-						logger::error("Failure to make get formula for {}:\n'{}'", name, get_strings[mod]);
+						logger::error("Failure to make set formula for {}:\n'{}'", magic_enum::enum_name(mod), set_strings[mod]);
 					}
+
+
+
 				}
-
-				if (mod == ActorValueModifier::kTotal)
-					break;
-			}
-
-			for (ActorValueModifier mod = ActorValueModifier::kPermanent; mod <= ActorValueModifier::kTotal; mod++)
-			{
-				if (set_strings[mod] == "")
-					continue;
-
-
-				//For there to be a set there, there must be a coresponding get function
-				if (!(ModifierToValueInput(mod) & _getFlags)) {
-					logger::info("corresponding get function must exist for set function.");//state which are in error
-					continue;
-				}
-
-				if (_set[mod] = SetFormula::Create("cause", "from", "to", set_strings[mod], is_legacy ? legacy : commons)) {
-					_setFlags |= ModifierToValueInput(mod);
-				}
-
-				else {
-					logger::error("Failure to make set formula for {}:\n'{}'", magic_enum::enum_name(mod), set_strings[mod]);
-				}
-
-
-
 			}
 		}
+
 	}
 	void FunctionalValueInfo::LoadFromFile(const FileNode& node, bool is_legacy)
 	{
