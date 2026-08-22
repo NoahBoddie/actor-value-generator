@@ -437,7 +437,9 @@ namespace AVG
 						result = false;
 					}
 					else {
-						logger::info("Actor {}(FormID:{:08X}) successful, creating and deserializing.", actor->GetName(), static_cast<RE::FormID>(entry.first));
+#ifndef NDEBUG
+						logger::debug("Actor {}(FormID:{:08X}) successful, creating and deserializing.", actor->GetName(), static_cast<RE::FormID>(entry.first));
+#endif
 						entry.second = ExtraValueStorage{ actor, true };
 					}
 				}
