@@ -144,6 +144,16 @@ namespace AVG
 		return 0;
 	}
 
+
+	void NullifyInstructions(uintptr_t address, size_t num)
+	{
+		while (num-- != 0) {
+			REL::safe_write((uintptr_t)address, 0x90);
+		}
+	}
+
+
+
 	template <int I>
 	using ActorType = std::conditional_t<I == 0, RE::Character*, RE::PlayerCharacter*>;
 	
@@ -505,6 +515,8 @@ namespace AVG
 			//return;
 			auto placed_call = IsCallOrJump(hook_addr) > 0;
 
+			NullifyInstructions(hook_addr, 0x6);
+
 			auto place_query = trampoline.write_branch<5>(hook_addr, (uintptr_t)thunk);
 
 			if (!placed_call)
@@ -701,6 +713,8 @@ namespace AVG
 			//return;
 
 			auto placed_call = IsCallOrJump(hook) > 0;
+
+			NullifyInstructions(hook, 0x6);
 
 			auto place_query = trampoline.write_branch<5>(hook, (uintptr_t)thunk);
 
@@ -934,6 +948,8 @@ namespace AVG
 
 			auto placed_call = IsCallOrJump(hook_addr) > 0;
 
+			NullifyInstructions(hook_addr, (!IsAE() ? 0x5 : 0x6));
+
 			auto place_query = trampoline.write_branch<5>(hook_addr, (uintptr_t)thunk);
 
 			if (!placed_call)
@@ -1142,6 +1158,8 @@ namespace AVG
 			auto& trampoline = SKSE::GetTrampoline();
 
 			auto placed_call = IsCallOrJump(hook_addr) > 0;
+
+			NullifyInstructions(hook_addr, 0x6);
 
 			auto place_query = trampoline.write_branch<5>(hook_addr, (uintptr_t)thunk);
 
@@ -2540,6 +2558,8 @@ namespace AVG
 			//return;
 
 			auto placed_call = IsCallOrJump(hook) > 0;
+
+			NullifyInstructions(hook, 0x6);
 
 			auto place_query = trampoline.write_branch<5>(hook, (uintptr_t)thunk);
 
