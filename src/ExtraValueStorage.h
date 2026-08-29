@@ -35,7 +35,8 @@ namespace AVG
 
 		RE::VMTypeID form_Type = static_cast<RE::VMTypeID>(object->GetFormType());
 
-		const auto handle = vm->handlePolicy.GetHandleForObject(static_cast<RE::VMTypeID>(form_Type), object);
+		
+		const auto handle = vm->GetHandlePolicy().GetHandleForObject(static_cast<RE::VMTypeID>(form_Type), object);
 
 		if (handle){// && vm->handlePolicy.EmptyHandle() != handle) {
 			vm->SendAndRelayEvent(handle, &event_name, event_args, nullptr);
@@ -218,6 +219,7 @@ namespace AVG
 
 
 		inline static Mutex accessLock{};
+		inline static Mutex deleteLock{};
 
 
 
@@ -229,17 +231,14 @@ namespace AVG
 			StorageView(ExtraValueStorage* ptr) : storage{ ptr } {}
 			StorageView(ExtraValueStorage& ref) : StorageView{ &ref } {}
 
-			StorageView(Mutex& mtx, bool readOnly) 
+			StorageView(Mutex& mtx) : lock{ mtx }
 			{
-				if (readOnly)
-					ReadLockAccess(mtx);
-				else
-					WriteLockAccess(mtx);
+
 			}
 
 
 			ExtraValueStorage* storage = nullptr;
-			std::variant<std::monostate, WriteLock, ReadLock> lock;
+			ReadLock lock;
 
 			operator ExtraValueStorage* () { return storage; }
 			operator bool () const noexcept { return storage; }
@@ -250,36 +249,13 @@ namespace AVG
 			ExtraValueStorage& operator*() { assert(storage); return *storage; }
 
 
-			void ReadLockAccess(Mutex& mtx)
-			{
-				if (lock.index() == 0)
-				{
-					lock = WriteLock{ mtx };
-				}
-			}
-
-			void WriteLockAccess(Mutex& mtx)
-			{
-				if (lock.index() == 0)
-				{
-					lock = WriteLock{ mtx };
-				}
-			}
 
 			void SetStorage(ExtraValueStorage* ptr)
 			{
 				storage = ptr;
 				if (!ptr)//if no value is found this has no reason to maintain a lock
 				{
-					switch (lock.index())
-					{
-					case 1:
-						std::get<1>(lock).unlock();
-						break;
-					case 2:
-						std::get<2>(lock).unlock();
-						break;
-					}
+					lock.unlock();
 				}
 			}
 
@@ -423,9 +399,6 @@ namespace AVG
 
 			void operator()(TOME::SerialBuffer& buffer, bool& result, std::pair<RE::FormID, ExtraValueStorage>& entry)
 			{
-
-				WriteLock guard{ accessLock };//If a deadlock happens because I remove this I very well may crash the fuck out
-
 				result = buffer.SerializeFormID(entry.first);//Needs to be a particular type of object, serializable formID
 
 
@@ -562,7 +535,9 @@ namespace AVG
 
 			RecoverInfo* rec_data = info->GetRecoverInfo();
 	
-			if (!rec_data || !rec_data->recoveryDelay)
+			//if (!rec_data || !rec_data->recoveryDelay)
+			//	return;
+			if (!rec_data || !rec_data->delay)
 				return;
 
 			float* curr_delay = GetExtraValueDelay(id);
@@ -570,7 +545,8 @@ namespace AVG
 			if (!curr_delay)
 				return;
 
-			float new_delay = rec_data->recoveryDelay(owner)->Call();
+			//float new_delay = rec_data->recoveryDelay(owner)->Call();
+			float new_delay = rec_data->delay.GetValue(owner);
 
 			if (new_delay > *curr_delay) {
 				*curr_delay = new_delay;
@@ -672,9 +648,10 @@ namespace AVG
 			
 			RecoverInfo* recover_data = info->GetRecoverInfo();
 
-			if (!recover_data || !recover_data->recoveryRate)
+			//if (!recover_data || !recover_data->recoveryRate)
+			//	return;
+			if (!recover_data || !recover_data->rate)
 				return;
-
 
 
 
@@ -698,7 +675,8 @@ namespace AVG
 			}
 
 			
-			float mod_value = recover_data->recoveryRate(owner)->Call();
+			//float mod_value = recover_data->recoveryRate(owner)->Call();
+			float mod_value = recover_data->rate.GetValue(owner);
 			
 			//Would be good to isolate this some how.
 			float current = GetValue(owner, entry.first, ExtraValueInput::Maximum, info);

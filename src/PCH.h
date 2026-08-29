@@ -142,7 +142,6 @@
 
 #include "Plugin.h"
 
-#include "Impl/Enums.h"
 #include "ClibUtil/utils.hpp"
 #include "MergeMapperPluginAPI.h"
 namespace AVG
@@ -150,6 +149,9 @@ namespace AVG
     using namespace RGL_NAMESPACE;
     using namespace RGL_INCLUDE_NAMESPACE;
 }
+
+#include "Impl/Enums.h"
+
 
 // Compatible declarations with other sample projects.
 #define DLLEXPORT __declspec(dllexport)

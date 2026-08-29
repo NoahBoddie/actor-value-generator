@@ -404,8 +404,8 @@ namespace AVG::Legacy
 		case RE::Setting::Type::kFloat:
 			return setting->GetFloat();
 
-		case RE::Setting::Type::kSignedInteger:
-			return setting->GetSInt();
+		case RE::Setting::Type::kInteger:
+			return setting->GetInteger();
 
 		default:
 			//report.

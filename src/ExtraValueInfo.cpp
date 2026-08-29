@@ -257,9 +257,11 @@ namespace AVG
 
 		if (!no_rec)
 		{
-			auto rec = ObtainRecoverInfo();
-			rec->recoveryDelay = ValueFormula::Create(delay, is_legacy ? legacy : avg);//, "ActorValueGenerator::Commons");
-			rec->recoveryRate = ValueFormula::Create(rate, is_legacy ? legacy : avg);
+			auto recover_info = ObtainRecoverInfo();
+			//recover_info->recoveryDelay = ValueFormula::Create(delay, is_legacy ? legacy : avg);//, "ActorValueGenerator::Commons");
+			//recover_info->recoveryRate = ValueFormula::Create(rate, is_legacy ? legacy : avg);
+			recover_info->delay.SetValue(ValueFormula::Create(delay, is_legacy ? legacy : avg));
+			recover_info->rate.SetValue(ValueFormula::Create(rate, is_legacy ? legacy : avg));
 		}
 
 		if (auto* rec = GetRecoverInfo(); rec && fixed) {
@@ -280,9 +282,10 @@ namespace AVG
 
 			if (update_formula != "" && update_formula != "0")
 			{
-				auto* default_data = ObtainDefaultInfo();
+				auto* default_info = ObtainDefaultInfo();
 
-				default_data->defaultFunction = ValueFormula::Create(update_formula, is_legacy ? legacy : avg);
+				//default_info->defaultFunction = ValueFormula::Create(update_formula, is_legacy ? legacy : avg);
+				default_info->data.SetValue(ValueFormula::Create(update_formula, is_legacy ? legacy : avg));
 
 
 				std::string default_type = default_table["type"].value_or("Implicit");
@@ -290,13 +293,13 @@ namespace AVG
 				switch (RGL::Hash<RGL::HashFlags::Insensitive>(default_type))
 				{
 				case "Implicit"_ih:
-					default_data->_type = DefaultInfo::Implicit;
+					default_info->_type = DefaultInfo::Implicit;
 					break;
 				case "Explicit"_ih:
-					default_data->_type = DefaultInfo::Explicit;
+					default_info->_type = DefaultInfo::Explicit;
 					break;
 				case "Constant"_ih:
-					default_data->_type = DefaultInfo::Constant;
+					default_info->_type = DefaultInfo::Constant;
 					break;
 				}
 			}

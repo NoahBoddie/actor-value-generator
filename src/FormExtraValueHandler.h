@@ -175,7 +175,7 @@ namespace AVG
 			} 
 			else IF_FORM(RE::BGSPerk)
 			{
-				using PerkEntryFunction = RE::BGSEntryPointPerkEntry::EntryData::Function;
+				using PerkEntryFunction = RE::BGSEntryPointPerkEntry::Function;
 				
 				HandleCondition(form->perkConditions, form, successes);
 
@@ -216,7 +216,7 @@ namespace AVG
 					case PerkEntryFunction::kAddActorValueMult:
 					case PerkEntryFunction::kSetToActorValueMult:
 					case PerkEntryFunction::kMultiplyActorValueMult:
-					case PerkEntryFunction::kMultiply1PlusActorValueMult:
+					case PerkEntryFunction::kMultiplyOnePlusActorValueMult:
 						break;
 					}
 					

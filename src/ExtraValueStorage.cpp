@@ -26,9 +26,12 @@ namespace AVG
 				{
 					ExtraValueStorage::WriteLock guard{ ExtraValueStorage::accessLock };
 
-					for (auto& pair : copy) {
-						map.insert_or_assign(pair.first, std::move(pair.second));
-					}
+					copy.merge(map);
+					map = std::move(copy);
+					//map.insert_or_assign(copy);
+					//for (auto& pair : copy) {
+					//	map.insert_or_assign(pair.first, std::move(pair.second));
+					//}
 				}
 			}
 		}
@@ -63,8 +66,8 @@ namespace AVG
 			return test;
 		}
 		
-		//ReadLock guard{ accessLock };
-		StorageView view{ accessLock, true };
+		StorageView view{ deleteLock };
+		ReadLock guard{ accessLock };
 
 		auto result = _valueTable.find(actor->formID);
 
@@ -96,8 +99,8 @@ namespace AVG
 		}
 
 
-		StorageView view{ accessLock, false };
-		//WriteLock guard{ accessLock };
+		StorageView view{ deleteLock };
+		WriteLock guard{ accessLock };
 		
 		ExtraValueStorage& storage = _valueTable[actor->formID];
 		
@@ -113,7 +116,8 @@ namespace AVG
 
 	bool ExtraValueStorage::RemoveStorage(RE::FormID _id)
 	{
-		WriteLock guard{ accessLock };
+		WriteLock access_guard{ accessLock };
+		WriteLock delete_guard{ deleteLock };
 
 		if (!_id)
 			return false;
@@ -134,8 +138,8 @@ namespace AVG
 
 	void ExtraValueStorage::RemoveAllStorages()
 	{
-		WriteLock guard{ accessLock };
-
+		WriteLock access_guard{ accessLock };
+		WriteLock delete_guard{ deleteLock };
 		_valueTable.clear();
 	}
 

@@ -157,7 +157,7 @@ namespace {
 				{
 					auto& lex_table = *entry.as_table();
 
-					auto lex_version = REL::Version{ std::bit_cast<std::array<uint16_t, 4>>(LEX::InterfaceManager::GetVersion()) };
+					auto lex_version = REL::Version{ std::bit_cast<std::array<uint16_t, 4>>(LEX::InterfaceManager::GetVersion().library) };
 					std::swap(lex_version[0], lex_version[3]);
 					std::swap(lex_version[1], lex_version[2]);
 					
@@ -532,6 +532,7 @@ namespace {
                 case MessagingInterface::kPostLoad: // Called after all plugins have finished running SKSEPlugin_Load.
 					LEX::InterfaceManager::ValidateVersion(false);
 					InitializeLexiconMessaging();
+
 					break;
 				
             }
@@ -590,7 +591,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
     auto version = plugin->GetVersion();
 	
     log::info("{} {} is loading...", plugin->GetName(), version);
-	
+	/*
 	LEX::InterfaceManager::AddVersionCheck([](uintptr_t server, uintptr_t client) -> LEX::Update
 		{
 			if (server <= REL::Version{ 0, 1, 1, 11 }) {
@@ -600,7 +601,7 @@ SKSEPluginLoad(const LoadInterface* skse) {
 			return LEX::Update::Match;
 		}
 	);
-
+	//*/
     Init(skse, false);
 	
     InitializeMessaging();

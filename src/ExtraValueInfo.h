@@ -113,6 +113,79 @@ namespace AVG
 	using SetFormula = LEX::Formula<void(RE::Actor::*)(RE::Actor*, float, float)>;
 
 
+
+	struct ValueData
+	{
+		using Value = std::variant<std::monostate, ValueFormula, RE::TESGlobal*, RE::Setting*, float>;
+
+		enum Stored
+		{
+			kNone,
+			kFormula,
+			kGlobal,
+			kSetting,
+			kCache
+		};
+
+		ValueData() noexcept = default;
+
+
+		Value value;
+
+		operator bool() const noexcept
+		{
+			return !value.index();
+		}
+
+		void SetValue(ValueFormula&& formula)
+		{
+			if (formula) {
+				if (formula->IsConstant() == true) {
+					SetValue(formula(RE::PlayerCharacter::GetSingleton())->Call());
+				}
+				else {
+					SetValue(Value{ std::move(formula) });
+				}
+			}
+		}
+
+		void SetValue(Value it)
+		{
+			bool real = true;
+			switch (it.index())
+			{
+			case kGlobal:
+				real = std::get<RE::TESGlobal*>(it);
+				break;
+
+			case kSetting:
+				real = std::get<RE::Setting*>(it);
+				break;
+			}
+
+			if (real) {
+				value = std::move(it);
+			}
+		}
+
+		float GetValue(RE::Actor* target)
+		{
+			switch (value.index())
+			{
+			case kNone:
+				return 0;
+			case kFormula:
+				return std::get<ValueFormula>(value)(target)->Call();
+			case kGlobal:
+				return std::get<RE::TESGlobal*>(value)->value;
+			case kSetting:
+				return std::get<RE::Setting*>(value)->GetFloat();
+			case kCache:
+				return std::get<float>(value);
+			}
+		}
+	};
+
 	//This is functionally default data. Update data isn't something I'll want to implement for a while, and since this doesn't serialize I'm comfortable
 	// doing it later.
     struct DefaultInfo
@@ -124,12 +197,15 @@ namespace AVG
 			Constant,	//The values never change from the defined default
 		};
 
-		Type _type = Type::Implicit;
 
+
+		Type _type = Type::Implicit;
+		ValueData data;
 		//rate is required.
 		//If value to update is zero, no timed update data will be used, and instead it will only update upon load.
-		ValueFormula defaultFunction;
+		//ValueFormula defaultFunction;
         
+
 
 		bool AllowSoftDefault() const
 		{
@@ -141,7 +217,9 @@ namespace AVG
 			if (!this)
 				return 0;
 
-			return defaultFunction(target)->Call();
+			//return defaultFunction(target)->Call();
+			return data.GetValue(target);
+
 		}
     };
 
@@ -159,12 +237,14 @@ namespace AVG
 			Polar = 0b110,		//Same as not having negative nor positive
 		};
 
-		float tmp_recDelay{};
-		float tmp_recRate{};
-		
+
+		ValueData delay{};
+		ValueData rate{};
+
+
 		//While delay is not required, the rate is similarly required.
-		ValueFormula recoveryDelay;  //Null will mean there is no delay, if recovery exists.
-		ValueFormula recoveryRate;  //Null here means no recovery.
+		//ValueFormula recoveryDelay;  //Null will mean there is no delay, if recovery exists.
+		//ValueFormula recoveryRate;  //Null here means no recovery.
     
 		Flags flags = None;
 
@@ -175,6 +255,8 @@ namespace AVG
 
 	struct RegenData
 	{
+		//I'd also like to use this for functional deltas.
+
 		float _time = 0;
 		float _pool{ NAN };
 	};
@@ -872,11 +954,11 @@ namespace AVG
 			if (GetSkillInfo() != nullptr)
 			{
 				static RE::Setting* iAVDSkillStart = RE::GameSettingCollection::GetSingleton()->GetSetting("iAVDSkillStart");
-				return iAVDSkillStart->GetSInt();
+				return iAVDSkillStart->GetInteger();
 			}
 			
-			auto def = GetDefaultInfo(); 
-			return !def ? 0 : def->defaultFunction(target)->Call();
+			auto def_info = GetDefaultInfo(); 
+			return !def_info ? 0 : def_info->data.GetValue(target);
 		}
 
 		
