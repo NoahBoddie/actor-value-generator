@@ -172,7 +172,7 @@ namespace util {
 
 
 
-#define RELOCATION_OFFSET(SE, AE, ...) (ptrdiff_t)REL::VariantOffset(SE, AE, SE).offset()
+#define RELOCATION_OFFSET(SE, AE,...) (ptrdiff_t)REL::VariantOffset(SE, AE, (SE __VA_OPT__(,) __VA_ARGS__)).offset()
 
 //Move these eventually pls.
 inline LEX::IScript* avg = nullptr;

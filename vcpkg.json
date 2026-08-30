@@ -1,48 +1,48 @@
 {
-    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
-    "name": "actor-value-generator",
-    "version-string": "2.0.0.0",
-    "port-version": 0,
-    "description": "An SKSE modding tool that enables users to make new actor values as well as extending their existing functionally.",
-    "homepage": "https://www.skyrimng.com",
-    "license": "Apache-2.0",
-    "features": {
-        "scripts": {
-            "description": "Install Papyrus sources for this program to develop on top of it."
-        },
-        "plugin": {
-            "description": "Build the SKSE plugin.",
-          "dependencies": [
-            "commonlibsse-ng",
-            "xbyak",
-            "directxmath",
-            "directxtk",
-            "openvr",
-            "tomlplusplus",
-            "boost-algorithm",
-            "boost-regex",
-            "magic-enum",
-            "boost-multiprecision",
-            "simpleini",
-            "clib-util"
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "actor-value-generator",
+  "version-string": "2.0.0.0",
+  "port-version": 0,
+  "description": "An SKSE modding tool that enables users to make new actor values as well as extending their existing functionally.",
+  "homepage": "https://www.skyrimng.com",
+  "license": "GPL-3.0-or-later",
+  "features": {
+    "scripts": {
+      "description": "Install Papyrus sources for this program to develop on top of it."
+    },
+    "plugin": {
+      "description": "Build the SKSE plugin.",
+      "dependencies": [
+        "commonlibsse-ng",
+        "xbyak",
+        "directxmath",
+        "directxtk",
+        "openvr",
+        "tomlplusplus",
+        "boost-algorithm",
+        "boost-regex",
+        "magic-enum",
+        "boost-multiprecision",
+        "simpleini",
+        "clib-util"
+      ]
+    },
+    "tests": {
+      "description": "Build tests for the SKSE plugin.",
+      "dependencies": [
+        {
+          "name": "actor-value-generator",
+          "default-features": false,
+          "features": [
+            "plugin"
           ]
         },
-        "tests": {
-            "description": "Build tests for the SKSE plugin.",
-            "dependencies": [
-              {
-                "name": "actor-value-generator",
-                "default-features": false,
-                "features": [
-                  "plugin"
-                ]
-              },
-                "catch2"
-            ]
-        }
-    },
-    "default-features": [
-        "plugin",
-        "tests"
-    ]
+        "catch2"
+      ]
+    }
+  },
+  "default-features": [
+    "plugin",
+    "tests"
+  ]
 }

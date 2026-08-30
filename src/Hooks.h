@@ -145,10 +145,13 @@ namespace AVG
 	}
 
 
-	void NullifyInstructions(uintptr_t address, size_t num)
+	void NullifyInstructions(uintptr_t address, size_t num, size_t place_size = 5)
 	{
+		address += place_size;
+		num -= place_size;
+
 		while (num-- != 0) {
-			REL::safe_write((uintptr_t)address, 0x90);
+			REL::safe_write(address, 0x90);
 		}
 	}
 
@@ -518,6 +521,8 @@ namespace AVG
 			NullifyInstructions(hook_addr, 0x6);
 
 			auto place_query = trampoline.write_branch<5>(hook_addr, (uintptr_t)thunk);
+
+
 
 			if (!placed_call)
 				func = (uintptr_t)code.getCode();
