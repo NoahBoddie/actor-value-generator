@@ -314,7 +314,7 @@ namespace AVG
 
 					if (!info) {
 						if (i < mani_size)
-							logger::warn("ExtraValueInfo at {} not found. Tossing data.", i);
+							logger::debug("ExtraValueInfo at {} not found. Tossing data.", i);
 
 						continue;
 					}
@@ -322,7 +322,7 @@ namespace AVG
 					DataID id = info->GetDataID();
 
 					if (id == ExtraValueInfo::FunctionalID) {
-						logger::warn("ExtraValueInfo {}({}) is now functional. Tossing data.", info->GetName(), id);
+						logger::debug("ExtraValueInfo {}({}) is now functional. Tossing data.", info->GetName(), id);
 						continue;
 					}
 
@@ -406,13 +406,11 @@ namespace AVG
 					 RE::Actor* actor = RE::TESForm::LookupByID<RE::Actor>(entry.first);
 
 					if (!actor) {
-						logger::error("Actor FormID {:08X} invalid, dumping.", static_cast<RE::FormID>(entry.first));
+						logger::warn("Actor FormID {:08X} invalid, dumping.", static_cast<RE::FormID>(entry.first));
 						result = false;
 					}
 					else {
-#ifndef NDEBUG
 						logger::debug("Actor {}(FormID:{:08X}) successful, creating and deserializing.", actor->GetName(), static_cast<RE::FormID>(entry.first));
-#endif
 						entry.second = ExtraValueStorage{ actor, true };
 					}
 				}
@@ -422,7 +420,7 @@ namespace AVG
 				result = buffer.DiscardFailure(entry.second, result);
 
 				if (result)
-					logger::info("serialized: {:08X}", static_cast<RE::FormID>(entry.first));
+					logger::debug("serialized: {:08X}", static_cast<RE::FormID>(entry.first));
 				else
 					logger::error("failed to de/serialize");
 
@@ -552,7 +550,6 @@ namespace AVG
 
 			if (new_delay > *curr_delay) {
 				*curr_delay = new_delay;
-				logger::debug("new delay {}", new_delay);
 			}
 		}
 

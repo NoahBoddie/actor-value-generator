@@ -130,7 +130,7 @@ namespace AVG
 
 		auto removes = _valueTable.erase(_id);
 		if (removes)
-			logger::info("[Unregister {:08X} ]", _id);
+			logger::debug("[Unregister {:08X} ]", _id);
 		
 
 		return removes;

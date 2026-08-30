@@ -151,11 +151,6 @@ namespace AVG
 		num -= place_size;
 
 		while (num-- != 0) {
-			// 0x90 is an int literal, and REL::safe_write's integral overload writes
-			// sizeof(T) bytes -- passing it bare stamped 4 bytes (90 00 00 00) and wiped
-			// three bytes of real code past the intended NOP. Cast to a single byte, and
-			// advance the cursor so a run longer than one byte nops forward instead of
-			// hammering the same address.
 			REL::safe_write(address++, static_cast<std::uint8_t>(0x90));
 		}
 	}
@@ -364,7 +359,7 @@ namespace AVG
 
 
 			if (info) {  
-				logger::debug("hit mod {}, {}, val {}, who {}", raw_value, (int32_t)a2, a4, !actor ? "none" : actor->GetName());
+				//logger::debug("hit mod {}, {}, val {}, who {}", raw_value, (int32_t)a2, a4, !actor ? "none" : actor->GetName());
 				info->ModExtraValue(a_this, actor, a4, a2);
 			} else {
 				auto old_value = a_this->GetActorValueModifier(a2, a3);
@@ -523,10 +518,10 @@ namespace AVG
 			//return;
 			auto placed_call = IsCallOrJump(hook_addr) > 0;
 
-			NullifyInstructions(hook_addr, 0x6);
 
 			auto place_query = trampoline.write_branch<5>(hook_addr, (uintptr_t)thunk);
 
+			NullifyInstructions(hook_addr, 0x6);
 
 
 			if (!placed_call)
@@ -724,9 +719,11 @@ namespace AVG
 
 			auto placed_call = IsCallOrJump(hook) > 0;
 
-			NullifyInstructions(hook, 0x6);
 
 			auto place_query = trampoline.write_branch<5>(hook, (uintptr_t)thunk);
+
+			NullifyInstructions(hook, 0x6);
+
 
 			if (!placed_call)
 				func = (uintptr_t)code.getCode();
