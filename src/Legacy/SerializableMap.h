@@ -59,6 +59,47 @@ namespace RGL
 //#endif
 	};
 
+	/*
+	template<class PairA, class PairB, class PairSerializeClass = DefaultSerialize, class RevertClass = void>
+	class SerializableMap : public SerialIterator<std::map<PairA, PairB>, std::pair<const PairA, PairB>, PairSerializeClass, RevertClass>
+	{
+	protected:
+		//using Pair = std::pair<const PairA, PairB>;
+		using Pair = std::pair<const PairA, PairB>;
+
+
+	public:
+
+		void EmplaceEntry(Pair& entry) override
+		{
+			this->_iteratable.emplace(entry);
+		}
+
+	
+
+		PairB& operator[](const PairA& key)
+		{
+			auto& _map = this->get();
+			return _map[key];
+		}
+		//#ifdef ddddddddddddddddd
+		template<class LikeA>
+		PairB& operator[](const LikeA& key)
+		{
+			//Check for invalid conversions.
+			auto& _map = this->get();
+
+			//static_assert(std::is_same_v<LikeA, SerialFormID>, "llll");
+			//return _map[static_cast<const PairA&>(*&key)];
+			//Try this if you can convert this.
+			//PairA pair_test = key;
+			PairA pair_test(key);
+			//Desperate.
+			return _map[pair_test];
+		}
+		//#endif
+	};
+	//*/
 
 	//Removes the need for serialFormID (it's hard to use in maps).
 	//template<DerivedSerialWrapper<RE::FormID> WrappedFormID>
