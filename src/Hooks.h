@@ -151,7 +151,12 @@ namespace AVG
 		num -= place_size;
 
 		while (num-- != 0) {
-			REL::safe_write(address, 0x90);
+			// 0x90 is an int literal, and REL::safe_write's integral overload writes
+			// sizeof(T) bytes -- passing it bare stamped 4 bytes (90 00 00 00) and wiped
+			// three bytes of real code past the intended NOP. Cast to a single byte, and
+			// advance the cursor so a run longer than one byte nops forward instead of
+			// hammering the same address.
+			REL::safe_write(address++, static_cast<std::uint8_t>(0x90));
 		}
 	}
 
