@@ -1847,7 +1847,7 @@ namespace AVG
 		static void Install()
 		{
 			//36 71 111 108 100
-			//SE: 0x8BE990, AE: 0x0000, VR: ???
+			//SE: 0x8BE990, AE: 0x0000, VR: 0x1408EB8D0 (id 51636, verified via call-graph/xref evidence, status 3)
 			REL::Relocation<uintptr_t> hook{ REL::RelocationID{51636, 000}, 0x2F8 };
 
 			auto& tramp = SKSE::GetTrampoline();
@@ -1959,7 +1959,7 @@ namespace AVG
 		static void Patch()
 		{
 			//8C09E0+149
-			//SE: 8C09E0 , AE: 0x000000, VR: ???
+			//SE: 8C09E0 , AE: 0x000000, VR: ??? -- unresolved (addrlib.csv's automated hint pointed at an unrelated function; not re-derived)
 			//You can try not to use the trampoline here.
 			auto address = REL::RelocationID(51644, 000000).address();
 
@@ -2008,7 +2008,7 @@ namespace AVG
 		static void Patch()
 		{
 			
-			//SE: 8C5B60, AE: 0x000000, VR: ???
+			//SE: 8C5B60, AE: 0x000000, VR: ??? -- unresolved (addrlib.csv's automated hint pointed at an unrelated function; not re-derived)
 			//You can try not to use the trampoline here.
 			auto hook_addr = REL::RelocationID(51661, 000000).address() + 0x3AA;
 
@@ -2060,7 +2060,7 @@ namespace AVG
 	{
 		static void Patch()
 		{
-			//SE: 0x8C51B0 , AE: 0x000000, VR: ???
+			//SE: 0x8C51B0 , AE: 0x000000, VR: ??? -- unresolved (not yet found; VR reorders/inlines this StatsMenu function differently than SE)
 			//You can try not to use the trampoline here.
 			auto hook_addr = REL::RelocationID(51659, 000000).address() + 0x141;
 			
@@ -2119,7 +2119,7 @@ namespace AVG
 	{
 		static void Patch()
 		{
-			//SE: 0x8C51B0 , AE: 0x000000, VR: ???
+			//SE: 0x8C51B0 , AE: 0x000000, VR: ??? -- unresolved (not yet found; VR reorders/inlines this StatsMenu function differently than SE)
 			//You can try not to use the trampoline here.
 			auto hook_addr = REL::RelocationID(51659, 000000).address() + 0x2A7;
 
@@ -2179,7 +2179,7 @@ namespace AVG
 		static void Patch()
 		{
 			//8C7110
-			//SE: 8C7110 , AE: 0x000000, VR: ???
+			//SE: 8C7110 , AE: 0x000000, VR: 0x1408F5BF0 (id 51666, VR carries a propagated sub_1408C7110 symbol, status 3)
 			//You can try not to use the trampoline here.
 			auto hook_addr = REL::RelocationID(51666, 000000).address() + 0xAB;
 
@@ -2245,7 +2245,7 @@ namespace AVG
 		{
 			//This hook too, can just be inlined into the code.
 
-			//SE: 8C4CA0 , AE: 0x000000, VR: ???
+			//SE: 8C4CA0 , AE: 0x000000, VR: 0x1408F1620 (id 51658, VR carries a propagated sub_1408C4CA0 symbol, status 3)
 			//You can try not to use the trampoline here.
 			auto address = REL::Relocation<uintptr_t>{ REL::RelocationID{51658, 000000}, 0x159 }.address();
 
@@ -2300,7 +2300,7 @@ namespace AVG
 		{
 			//This hook too, can just be inlined into the code.
 
-			//SE: 8C4CA0 , AE: 0x000000, VR: ???
+			//SE: 8C4CA0 , AE: 0x000000, VR: 0x1408F1620 (id 51658, VR carries a propagated sub_1408C4CA0 symbol, status 3)
 			//You can try not to use the trampoline here.
 			auto address = REL::Relocation<uintptr_t>{ REL::RelocationID{51658, 000000}, 0x16D }.address();
 
@@ -2352,7 +2352,7 @@ namespace AVG
 		static void Patch()
 		{
 			//8CC7B0+5D
-			//SE: 8CC7B0, AE: 0x000000, VR: ???
+			//SE: 8CC7B0, AE: 0x000000, VR: 0x1408F9730 (id 51738, confirmed via call-graph: calls the confirmed VR StatsMenu ctor, status 3)
 			auto address = REL::Relocation<uintptr_t>{ REL::RelocationID{51738, 000000}, 0x5D }.address();
 
 
@@ -2504,7 +2504,7 @@ namespace AVG
 		static void Patch()
 		{
 			///8C2BA0+148F
-			//SE: 8C2BA0, AE: 0x000000, VR: ???
+			//SE: 8C2BA0, AE: 0x000000, VR: 0x1408EFAD0 (id 51654, VR carries a propagated sub_1408C2BA0 symbol, status 3)
 			auto address = REL::Relocation<uintptr_t>{ REL::RelocationID{51654, 000000}, 0x148F }.address();
 
 
