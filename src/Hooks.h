@@ -193,7 +193,7 @@ namespace AVG
 
 			/*/
 			
-			auto hook_addr = REL::RelocationID(37517, 38462).address();//SE: 0x620D60, AE: 0x658440, VR: ???
+			auto hook_addr = REL::RelocationID(37517, 38462).address();//SE: 0x620D60, AE: 0x658440, VR: unregistered (unused branch, live vtable hook below is used instead)
 			auto return_addr = hook_addr + RELOCATION_OFFSET(0x6, 0x5);
 			
 			struct Code : Xbyak::CodeGenerator
@@ -316,7 +316,7 @@ namespace AVG
 		{
 			//Use variantID at some point pls.
 			//auto hook_addr = REL::ID(37523 /*0x621120*/).address();
-			auto hook_addr = REL::RelocationID(37523, 38468).address();//SE: 0x621120, AE: 0x6589B0, VR: ???
+			auto hook_addr = REL::RelocationID(37523, 38468).address();//SE: 0x621120, AE: 0x6589B0, VR: 0x140629ED0 (id 37523, verified byte-identical prologue at hook site)
 			auto return_addr = hook_addr + 0x5;
 			//*
 			struct Code : Xbyak::CodeGenerator
@@ -436,7 +436,7 @@ namespace AVG
 			
 			/*/
 
-			auto hook_addr = REL::RelocationID(37519, 38464).address();//SE: 0x620F30, AE: 0x658680, VR: ???
+			auto hook_addr = REL::RelocationID(37519, 38464).address();//SE: 0x620F30, AE: 0x658680, VR: unregistered (unused branch, live vtable hook above is used instead)
 			auto return_addr = hook_addr + 0x5;
 			
 			struct Code : Xbyak::CodeGenerator
@@ -498,7 +498,7 @@ namespace AVG
 		{
 			//Use variantID at some point pls.
 			//auto hook_addr = REL::ID(37524 /*0x621350*/).address();
-			auto hook_addr = REL::RelocationID(37524, 38469).address();//SE: 0x621350, AE: 0x658BD0, VR: ???
+			auto hook_addr = REL::RelocationID(37524, 38469).address();//SE: 0x621350, AE: 0x658BD0, VR: 0x14062A100 (id 37524, already status 4 in address library)
 			auto return_addr = hook_addr + 0x6;
 			//*
 			struct Code : Xbyak::CodeGenerator
@@ -573,7 +573,7 @@ namespace AVG
 			//Use variantID at some point pls.
 
 			
-			auto hook_addr = REL::RelocationID(26570, 27203).address();//SE: 0x3E1450, AE: 0x3FC5A0, VR: ???
+			auto hook_addr = REL::RelocationID(26570, 27203).address();//SE: 0x3E1450, AE: 0x3FC5A0, VR: 0x1403F0E00 (id 26570, verified byte-identical prologue at hook site)
 			auto return_addr = hook_addr + 0x5;
 			//*
 			struct Code : Xbyak::CodeGenerator
@@ -632,7 +632,7 @@ namespace AVG
 	{
 		static void Install()
 		{
-			//SE: 3E1230, AE: 3FC360, VR: ???
+			//SE: 3E1230, AE: 3FC360, VR: 0x1403F0BE0 (id 26563, verified byte-identical through the preserved 6-byte instruction)
 			auto hook = REL::RelocationID(26563, 27195).address();
 			uintptr_t offset = 0x6;
 
@@ -694,7 +694,7 @@ namespace AVG
 	{
 		static void Install()
 		{
-			//SE: 3E1130, AE: 3FC250, VR: ???
+			//SE: 3E1130, AE: 3FC250, VR: 0x1403F0AE0 (id 26561, already status 4 in address library)
 			auto hook = REL::RelocationID(26561, 27192).address();
 			uintptr_t offset = 0x6;
 
@@ -761,7 +761,7 @@ namespace AVG
 		{
 			//return;
 			// 
-			//SE: 0x5D57B0, AE: 0x60C1D0, VR:???
+			//SE: 0x5D57B0, AE: 0x60C1D0, VR: 0x1405DDD70 (id 36333, verified byte-identical call-site offset; vtable slot 0x420->0x428 is VR base-class growth, compiler-transparent)
 			REL::Relocation<uintptr_t> RecalculateLeveledActor{ REL::RelocationID { 36333, 37323 }, 0x51 };
 			
 			auto& trampoline = SKSE::GetTrampoline();
@@ -797,7 +797,7 @@ namespace AVG
 		{
 			auto& trampoline = SKSE::GetTrampoline();
  
-			//SE: 0x620610, AE: 0x657D40, VR:??????
+			//SE: 0x620610, AE: 0x657D40, VR: 0x1406293C0 (id 37509, verified byte-identical call-site offset)
 			REL::Relocation<uintptr_t> ActorValueUpdate{ REL::RelocationID { 37509, 38451 }, 0x19 };
 
 			//func = trampoline.write_call<5>(ResetReference.address(), (uintptr_t)code.getCode());
@@ -936,7 +936,7 @@ namespace AVG
 	{
 		static void Patch()
 		{
-			auto hook_addr = REL::RelocationID(40554, 41561).address();//SE: 0x6E61D0, AE: 0x720F40, VR: ???
+			auto hook_addr = REL::RelocationID(40554, 41561).address();//SE: 0x6E61D0, AE: 0x720F40, VR: 0x14070D0C0 (id 40554, verified byte-identical preserved prologue on the !IsAE() branch)
 
 			auto return_addr = hook_addr + (!IsAE() ? 0x5 : 0x6);
 
@@ -1148,7 +1148,7 @@ namespace AVG
 	{
 		static void Patch()
 		{
-			auto hook_addr = REL::RelocationID(40555, 41562).address();//SE: 0x6E64D0, AE: 0x721330, VR: ???
+			auto hook_addr = REL::RelocationID(40555, 41562).address();//SE: 0x6E64D0, AE: 0x721330, VR: 0x14070D3C0 (id 40555, verified byte-identical preserved prologue)
 
 			auto return_addr = hook_addr + 0x6;
 
@@ -1275,7 +1275,7 @@ namespace AVG
 	{
 		static void Patch()
 		{
-			//SE: 0x1004C0 , AE: 0x10C140, VR: ???
+			//SE: 0x1004C0 , AE: 0x10C140, VR: 0x140110A70 (id 11171, verified byte-identical call-site offset)
 			REL::Relocation<uintptr_t> ctor_hook{ REL::RelocationID { 11171, 11278 }, 0x20 };
 
 			auto& trampoline = SKSE::GetTrampoline();
@@ -1311,7 +1311,7 @@ namespace AVG
 
 		static void Patch()
 		{
-			//SE: 0x556780, AE: 0x5792A0, VR: ???
+			//SE: 0x556780, AE: 0x5792A0, VR: 0x14055C510 (id 33817, already status 4 in address library)
 			auto hook_addr = REL::RelocationID(33817, 34609).address();
 			auto return_addr = hook_addr + 0x5;
 			//*
@@ -1618,7 +1618,7 @@ namespace AVG
 		static void Install()
 		{
 			
-			//SE: 0x89A7F0, AE: 0x8DD700, VR: ???
+			//SE: 0x89A7F0, AE: 0x8DD700, VR: 0x1408C8880 (id 51143, verified byte-identical call-site offset, matches SE's 0x67 not AE's 0x6B)
 			REL::Relocation<uintptr_t> hook{ REL::RelocationID{51143, 52023}, REL::VariantOffset{0x67, 0x6B, 0x67} };
 
 			auto& tramp = SKSE::GetTrampoline();
@@ -1760,35 +1760,35 @@ namespace AVG
 		{
 			bool se = !IsAE();
 
-			//SE: 0x0F8630, AE: 0x1044E0, VR:???
+			//SE: 0x0F8630, AE: 0x1044E0, VR: 0x140108BE0 (id 10929, verified byte-identical cmp-site offset)
 			REL::Relocation<std::uintptr_t>ActiveEffect__GetCost{ REL::RelocationID{ 10929, 11017 }, 0x1D };
 
-			//SE: 0x1057D0, AE: 0x111650, VR:???
+			//SE: 0x1057D0, AE: 0x111650, VR: 0x140115DC0 (id 11356, verified byte-identical instruction stream through the cmp site)
 			REL::Relocation<std::uintptr_t>SpellItem__AdjustCost{ REL::RelocationID{ 11356, 11494 }, 0x29 };
 
-			//SE: 0x3BDF20, AE: 0x3D7A40, VR:???
+			//SE: 0x3BDF20, AE: 0x3D7A40, VR: 0x1403CD7A0 (id 25847, verified byte-identical at both cmp sites below)
 			REL::RelocationID getDamage{ 25847, 26410 };
-			
+
 			//SE: 0x229EF0, AE: 0x23B000, VR:???
 			REL::RelocationID TESBook__ReadSkill{ 17439, 17842 };
 
 			//SE: 0x86B980, AE: 0x8ABF40, VR:???
 			REL::RelocationID CraftAlch{ 50449, 51354 };
 
-			//SE: 0x739080, AE: 0x776E10, VR:???
+			//SE: 0x739080, AE: 0x776E10, VR: 0x140763C20 (id 42672, verified byte-identical cmp-site offset)
 			REL::Relocation<std::uintptr_t>Explosion__Damage{ REL::RelocationID{ 42672, 43844 }, 0x4B };
 
-			
+
 			//SE: 0x86C640, AE: 0x8ACCF0, VR:???
 			REL::Relocation<std::uintptr_t>CraftEnch__Enchant{ REL::RelocationID{ 50450, 51355 }, RELOCATION_OFFSET(0x256, 0x254) };
-			
-			//SE: 0x86D830, AE: 0x8AE270, VR:???
+
+			//SE: 0x86D830, AE: 0x8AE270, VR: 0x140898DC0 (id 50459, verified byte-identical cmp-site offset; hook call is currently commented out below)
 			REL::Relocation<std::uintptr_t>CraftEnch__Disenchant{ REL::RelocationID{ 50459, 51363 }, 0xA4 };
 
-			//SE: 0x9721C0, AE: 9AD6D0, VR: ???
+			//SE: 0x9721C0, AE: 9AD6D0, VR: 0x1409ABFD0 (id 54817, verified byte-identical cmp-site offset, register R8D)
 			REL::Relocation<std::uintptr_t>PYRS_AdvanceSkill{ REL::RelocationID{ 54817, 55449 }, 0x28 };
 
-			//SE: 0x979990, AE: 9B46A0, VR: ???
+			//SE: 0x979990, AE: 9B46A0, VR: 0x1409B4160 (id 55002, verified byte-identical cmp-site offset, register R10D)
 			REL::Relocation<std::uintptr_t>PYRS_IncrementSkill{ REL::RelocationID{ 55002, 55616 }, 0x2E };
 
 
@@ -1847,7 +1847,7 @@ namespace AVG
 		static void Install()
 		{
 			//36 71 111 108 100
-			//SE: 0x8BE990, AE: 0x0000, VR: ???
+			//SE: 0x8BE990, AE: 0x0000, VR: 0x1408EB8D0 (id 51636, verified via call-graph/xref evidence, status 3)
 			REL::Relocation<uintptr_t> hook{ REL::RelocationID{51636, 000}, 0x2F8 };
 
 			auto& tramp = SKSE::GetTrampoline();
@@ -1959,7 +1959,7 @@ namespace AVG
 		static void Patch()
 		{
 			//8C09E0+149
-			//SE: 8C09E0 , AE: 0x000000, VR: ???
+			//SE: 8C09E0 , AE: 0x000000, VR: ??? -- unresolved (addrlib.csv's automated hint pointed at an unrelated function; not re-derived)
 			//You can try not to use the trampoline here.
 			auto address = REL::RelocationID(51644, 000000).address();
 
@@ -2008,7 +2008,7 @@ namespace AVG
 		static void Patch()
 		{
 			
-			//SE: 8C5B60, AE: 0x000000, VR: ???
+			//SE: 8C5B60, AE: 0x000000, VR: ??? -- unresolved (addrlib.csv's automated hint pointed at an unrelated function; not re-derived)
 			//You can try not to use the trampoline here.
 			auto hook_addr = REL::RelocationID(51661, 000000).address() + 0x3AA;
 
@@ -2060,7 +2060,7 @@ namespace AVG
 	{
 		static void Patch()
 		{
-			//SE: 0x8C51B0 , AE: 0x000000, VR: ???
+			//SE: 0x8C51B0 , AE: 0x000000, VR: ??? -- unresolved (not yet found; VR reorders/inlines this StatsMenu function differently than SE)
 			//You can try not to use the trampoline here.
 			auto hook_addr = REL::RelocationID(51659, 000000).address() + 0x141;
 			
@@ -2119,7 +2119,7 @@ namespace AVG
 	{
 		static void Patch()
 		{
-			//SE: 0x8C51B0 , AE: 0x000000, VR: ???
+			//SE: 0x8C51B0 , AE: 0x000000, VR: ??? -- unresolved (not yet found; VR reorders/inlines this StatsMenu function differently than SE)
 			//You can try not to use the trampoline here.
 			auto hook_addr = REL::RelocationID(51659, 000000).address() + 0x2A7;
 
@@ -2179,7 +2179,7 @@ namespace AVG
 		static void Patch()
 		{
 			//8C7110
-			//SE: 8C7110 , AE: 0x000000, VR: ???
+			//SE: 8C7110 , AE: 0x000000, VR: 0x1408F5BF0 (id 51666, VR carries a propagated sub_1408C7110 symbol, status 3)
 			//You can try not to use the trampoline here.
 			auto hook_addr = REL::RelocationID(51666, 000000).address() + 0xAB;
 
@@ -2245,7 +2245,7 @@ namespace AVG
 		{
 			//This hook too, can just be inlined into the code.
 
-			//SE: 8C4CA0 , AE: 0x000000, VR: ???
+			//SE: 8C4CA0 , AE: 0x000000, VR: 0x1408F1620 (id 51658, VR carries a propagated sub_1408C4CA0 symbol, status 3)
 			//You can try not to use the trampoline here.
 			auto address = REL::Relocation<uintptr_t>{ REL::RelocationID{51658, 000000}, 0x159 }.address();
 
@@ -2300,7 +2300,7 @@ namespace AVG
 		{
 			//This hook too, can just be inlined into the code.
 
-			//SE: 8C4CA0 , AE: 0x000000, VR: ???
+			//SE: 8C4CA0 , AE: 0x000000, VR: 0x1408F1620 (id 51658, VR carries a propagated sub_1408C4CA0 symbol, status 3)
 			//You can try not to use the trampoline here.
 			auto address = REL::Relocation<uintptr_t>{ REL::RelocationID{51658, 000000}, 0x16D }.address();
 
@@ -2352,7 +2352,7 @@ namespace AVG
 		static void Patch()
 		{
 			//8CC7B0+5D
-			//SE: 8CC7B0, AE: 0x000000, VR: ???
+			//SE: 8CC7B0, AE: 0x000000, VR: 0x1408F9730 (id 51738, confirmed via call-graph: calls the confirmed VR StatsMenu ctor, status 3)
 			auto address = REL::Relocation<uintptr_t>{ REL::RelocationID{51738, 000000}, 0x5D }.address();
 
 
@@ -2504,7 +2504,7 @@ namespace AVG
 		static void Patch()
 		{
 			///8C2BA0+148F
-			//SE: 8C2BA0, AE: 0x000000, VR: ???
+			//SE: 8C2BA0, AE: 0x000000, VR: 0x1408EFAD0 (id 51654, VR carries a propagated sub_1408C2BA0 symbol, status 3)
 			auto address = REL::Relocation<uintptr_t>{ REL::RelocationID{51654, 000000}, 0x148F }.address();
 
 
@@ -2539,7 +2539,7 @@ namespace AVG
 	{
 		static void Install()
 		{
-			//SE: 621590, AE: 658E10, VR: ???
+			//SE: 621590, AE: 658E10, VR: 0x14062A340 (id 37527, already status 4 in address library)
 			auto hook = REL::RelocationID(37527, 38476).address();
 			uintptr_t offset = 0x6;
 
@@ -2701,8 +2701,8 @@ namespace AVG
 			//constexpr std::uint8_t NoOperation3[0x3]{ 0x0F, 0x1F, 0x00 };
 			//static_assert(sizeof(NoOperation3) == 0x3);
 			
-			REL::RelocationID comp_id1{ 34269, 35069 };//SE: 0x5671F0, AE: 0x58AE30, VR:???
-			REL::RelocationID comp_id2{ 34271, 35071 };//SE: 0x5672C0, AE: 0x58AF00, VR:???
+			REL::RelocationID comp_id1{ 34269, 35069 };//SE: 0x5671F0, AE: 0x58AE30, VR: 0x14056D7E0 (id 34269, verified byte-identical, matches SE's 0x3E offset not AE's 0x45)
+			REL::RelocationID comp_id2{ 34271, 35071 };//SE: 0x5672C0, AE: 0x58AF00, VR: 0x14056D8B0 (id 34271, verified byte-identical, matches SE's 0xCD offset not AE's 0xD0)
 
 			
 			//bool is_ae = REL::Module::get().version().compare(SKSE::RUNTIME_SSE_1_5_97) == std::strong_ordering::greater;
