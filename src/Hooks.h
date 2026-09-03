@@ -185,47 +185,6 @@ namespace AVG
 			func[1] = Character__Actor_VTable.write_vfunc(0x01, thunk<1>);
 
 			logger::info("GetActorValueHook complete...");
-
-			/*/
-			
-			auto hook_addr = REL::RelocationID(37517, 38462).address();//SE: 0x620D60, AE: 0x658440, VR: ???
-			auto return_addr = hook_addr + RELOCATION_OFFSET(0x6, 0x5);
-			
-			struct Code : Xbyak::CodeGenerator
-			{
-				Code(uintptr_t ret_addr)
-				{
-					//Preserves these instructions, then jumps to the last functional instruction.
-					
-					if (IsAE())
-					{
-						mov(r11, rsp);
-						push(rbp);
-						push(rsi);
-					}
-					else
-					{
-						push(rbp);
-						push(rsi);
-						push(rdi);
-						push(r14);
-					}
-
-					
-
-					mov(rax, ret_addr);
-					jmp(rax);
-				}
-			} static code{ return_addr };
-			
-			auto& trampoline = SKSE::GetTrampoline();
-
-			func[0] = (uintptr_t)code.getCode();
-
-			trampoline.write_branch<5>(hook_addr, thunk<0>);
-
-			logger::info("GetActorValueHook complete...");
-			//*/
 		}
 		template <int I>
 		static float thunk(RE::ActorValueOwner* a_this, RE::ActorValue av)
@@ -311,7 +270,7 @@ namespace AVG
 		{
 			//Use variantID at some point pls.
 			//auto hook_addr = REL::ID(37523 /*0x621120*/).address();
-			auto hook_addr = REL::RelocationID(37523, 38468).address();//SE: 0x621120, AE: 0x6589B0, VR: ???
+			auto hook_addr = REL::RelocationID(37523, 38468).address();//SE: 0x621120, AE: 0x6589B0, VR: 629ED0
 			auto return_addr = hook_addr + 0x5;
 			//*
 			struct Code : Xbyak::CodeGenerator
@@ -426,34 +385,6 @@ namespace AVG
 			func[1] = Character__Actor_VTable.write_vfunc(0x03, thunk<1>);
 
 			logger::info("GetBaseActorValueHook Complete...");
-		
-			return;
-			
-			/*/
-
-			auto hook_addr = REL::RelocationID(37519, 38464).address();//SE: 0x620F30, AE: 0x658680, VR: ???
-			auto return_addr = hook_addr + 0x5;
-			
-			struct Code : Xbyak::CodeGenerator
-			{
-				Code(uintptr_t ret_addr)
-				{
-					//uintptr_t arg_10 = qword ptr 18h;
-					mov(ptr[rsp + 0x18], rbx);
-					
-					mov(rax, ret_addr);
-					jmp(rax);
-				}
-			} static code{ return_addr };
-			
-			auto& trampoline = SKSE::GetTrampoline();
-
-			func[0] = (uintptr_t)code.getCode();
-
-			trampoline.write_branch<5>(hook_addr, thunk<0>);
-			
-			logger::info("GetBaseActorValueHook Complete...");
-			//*/
 		}
 
 		template <int I>
