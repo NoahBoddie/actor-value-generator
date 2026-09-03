@@ -140,7 +140,7 @@ namespace AVG
 			//This is a test to see if I can just replace the other version.
 			
 			//REL::ID old_list{ 514139 };
-			REL::RelocationID avi_list_ptr{ 514139, 400267 };//SE: 0x1EBE418, AE: 0x1F58128, VR: ???
+			REL::RelocationID avi_list_ptr{ 514139, 400267 };//SE: 0x1EBE418, AE: 0x1F58128, VR: 0x141F82AC8 (id 514139, already registered status 4)
 			REL::safe_write(avi_list_ptr.address(), &begin, 0x8);
 
 			return;
@@ -148,7 +148,7 @@ namespace AVG
 			auto& trampoline = SKSE::GetTrampoline();
 			//140567495 is the location I'm hooking into, remember.
 			//567470
-			REL::ID call_1{ 34274 };  //0x567470
+			REL::ID call_1{ 34274 };  //SE: 0x567470, VR: 0x14056DA60 (id 34274, verified byte-identical incl. the id-514139 pointer reference; this branch is unreachable, see the `return;` above)
 
 
 

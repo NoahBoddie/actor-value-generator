@@ -14,7 +14,7 @@ namespace AVG
 		//static inline RE::Setting* 
 		
 		
-		//SE: ???, AE: 0x3006808
+		//SE: 0x142F6B948, AE: 0x3006808, VR: 0x1430C3A08 (id 523660, already registered status 3)
 		inline static float* g_deltaTime = (float*)REL::RelocationID(523660, 410199).address();
 
 		
@@ -28,7 +28,8 @@ namespace AVG
 
 		static bool IsInBeastMode()
 		{
-			//2F4E920 / ???
+			//SE: 0x142F4E920 (gIsBeastMode), VR: 0x143013C70 (id 519908, verified via propagated symbol name and matching StatsMenu
+			// xrefs; only reached from the EXPERIMENTAL-gated StatsMenu hooks, not compiled into a release build)
 			static bool* address = (bool*)REL::RelocationID(519908, 000000000000000).address();
 			return *address;
 		}
