@@ -729,6 +729,32 @@ namespace AVG
 		return handler->LookupForm(std::stoi(std::string{ id_string }, nullptr, 16), plugin);
 
 	}
+
+	inline bool IsViewFormula(const FileView& view)
+	{
+		switch (view.type())
+		{
+			//case toml::node_type::boolean:
+		case toml::node_type::integer:
+		case toml::node_type::floating_point:
+			return true;
+
+
+
+		case toml::node_type::string:
+			if constexpr (1)
+			{
+				std::string formula = view.value_or("");
+				clib_util::string::trim(formula);
+				return formula != "" && formula != "0";
+			}
+			break;
+
+
+		}
+
+		return false;
+	}
 }
 
 
