@@ -134,7 +134,7 @@ namespace AVG
 
 		operator bool() const noexcept
 		{
-			return !value.index();
+			return value.index();
 		}
 
 		void SetValue(ValueFormula&& formula)
