@@ -668,7 +668,7 @@ namespace AVG
 				return AliasSet::ExactForm;//exact form
 			}
 			else if (str.contains(".es") == true) {
-				return AliasSet::Keyword;
+				return AliasSet::Plugin;
 			}
 			else {
 				return AliasSet::Keyword;//keyword
