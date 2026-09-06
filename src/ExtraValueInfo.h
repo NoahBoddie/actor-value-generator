@@ -116,7 +116,7 @@ namespace AVG
 
 	struct ValueData
 	{
-		using Value = std::variant<std::monostate, ValueFormula, RE::TESGlobal*, RE::Setting*, float>;
+		using Value = std::variant<std::monostate, ValueFormula, RE::TESGlobal*, RE::Setting*, float, std::unique_ptr<char[]>>;
 
 		enum Stored
 		{
@@ -124,8 +124,28 @@ namespace AVG
 			kFormula,
 			kGlobal,
 			kSetting,
-			kCache
+			kCache,
+			kString,//String is used when we don't have a value yet.
+
 		};
+
+
+		static constexpr std::string_view k_settings = "$setting:";
+		static constexpr std::string_view k_global = "$global:";
+
+		//R
+		bool IsConstant()const noexcept
+		{
+			switch (value.index())
+			{
+			case kCache:
+			case kNone:
+				return true;
+
+			default: 
+				return false;
+			}
+		}
 
 		ValueData() noexcept = default;
 
@@ -166,6 +186,9 @@ namespace AVG
 			if (real) {
 				value = std::move(it);
 			}
+			else {
+				value = std::monostate{};
+			}
 		}
 
 		float GetValue(RE::Actor* target)
@@ -179,9 +202,125 @@ namespace AVG
 			case kGlobal:
 				return std::get<RE::TESGlobal*>(value)->value;
 			case kSetting:
-				return std::get<RE::Setting*>(value)->GetFloat();
+				if constexpr (1)
+				{
+					RE::Setting* setting = std::get<RE::Setting*>(value);
+
+					switch (setting->GetType())
+					{
+					case RE::Setting::Type::kFloat:
+						return setting->GetFloat();
+					
+					case RE::Setting::Type::kInteger:
+						return setting->GetInteger();
+					}
+				}
+				return 0.f;
+
+
 			case kCache:
 				return std::get<float>(value);
+
+			case kString:
+				if (auto data_handler = RE::TESDataHandler::GetSingleton())
+				{
+					auto& str = std::get<std::unique_ptr<char[]>>(value);
+
+					RE::TESGlobal* global = RE::TESForm::LookupByEditorID<RE::TESGlobal>(str.get());
+					if (!global) {
+						logger::error("Cannot find global {}", str.get());
+					}
+					SetValue(global);
+					return GetValue(target);
+				}
+				return 0.f;
+
+			default:
+				logger::warn("unknown ValueData index used {}", value.index());
+				break;
+			}
+		}
+
+		void LoadFromFile(const FileView& node, bool is_legacy)
+		{
+
+			switch (node.type())
+			{
+			//case toml::node_type::boolean:
+			case toml::node_type::integer:
+			case toml::node_type::floating_point:
+				if constexpr (1)
+				{
+					SetValue(node.value_or(0.f));
+				}
+				break;
+
+
+
+			case toml::node_type::string:
+				if constexpr (1)
+				{
+					
+					std::string formula = node.value_or("");
+					
+					clib_util::string::trim(formula);
+					
+					if (formula.empty() == false)
+					{
+						if (formula.front() == '$')
+						{
+							if (strnicmp(k_settings.data(), formula.data(), k_settings.size()) == 0)
+							{
+								std::string_view str{ formula.begin() + k_settings.size(), formula.end() };
+
+
+								if (!str.starts_with('f') && !str.starts_with('i')){//str.starts_with('b')
+									logger::warn("Can only use float/integer settings, {} is invalid", str);
+									return;
+								}
+
+								auto collection = RE::GameSettingCollection::GetSingleton();
+
+								assert(collection);
+								
+								RE::Setting* setting  = collection->GetSetting(str.data());
+
+								if (!setting) {
+									logger::error("Cannot find setting {}", str);
+									return;
+								}
+								
+								switch (setting->GetType())
+								{
+								case RE::Setting::Type::kInteger:
+								case RE::Setting::Type::kFloat:
+									SetValue(setting);
+									break;
+
+								default:
+									logger::error("Can only use float/integer settings, {} is invalid", str);
+									break;
+								}
+								
+							}
+							else if (strnicmp(k_global.data(), formula.data(), k_global.size()) == 0)
+							{
+								std::string_view str{ formula.begin() + k_global.size(), formula.end() };
+								std::unique_ptr<char[]> val{ new char[str.size() + 1] };
+								std::strcpy(val.get(), str.data());
+								SetValue(std::move(val));
+							}
+							else {
+								logger::warn("Unsupported direct config '{}' detected, ignoring output", formula);
+							}
+						}
+						else
+						{
+							SetValue(ValueFormula::Create(formula, is_legacy ? legacy : avg));
+						}
+					}
+				}
+				break;
 			}
 		}
 	};
@@ -205,11 +344,14 @@ namespace AVG
 		//If value to update is zero, no timed update data will be used, and instead it will only update upon load.
 		//ValueFormula defaultFunction;
         
-
+		Type type() const noexcept
+		{
+			return _type;
+		}
 
 		bool AllowSoftDefault() const
 		{
-			return _type != Type::Implicit;
+			return _type != Type::Implicit || data.IsConstant();
 		}
 
 		float GetDefault(RE::Actor* target)
@@ -277,12 +419,7 @@ namespace AVG
 	enum class InfoFlags
 	{
 		None = 0,
-		//Delete this.
-		DerivedAffected = 1 << 0,	//Do plugins derived inherit the av aliases of this EVI?
-		Negative = 0b010,
-		Positive = 0b100,
-		Direction = 0b110,	//This may not belong, but the idea is you use & on the flags with direction,
-							// then if it's equal to negative the it clamps that way, positive clamps that way, neither it goes both.
+		AliasDerived = 1 << 0,	//Do plugins derived inherit the av aliases of this EVI?
 	};
 
 	//Along with this sort of information, I believe I will likely need a class called loading info.
@@ -757,9 +894,10 @@ namespace AVG
 		RE::BSFixedString	GetFixedName() { return RE::BSFixedString(valueName.c_str()); }
 		RE::ActorValue		GetValueIDAsAV() { return static_cast<RE::ActorValue>(GetValueID()); }
 
-		virtual void LoadFromFile(const FileNode& node, bool legacy);
+		virtual void		LoadFromFile(const FileNode& node, bool legacy);
 
-		virtual InputFlags GetInputFlags() = 0;
+		virtual InputFlags	GetInputFlags() = 0;
+		virtual bool		IsImplicit() noexcept { return false; }
 
 		bool AllowsModifier() { return GetInputFlags().set & (ExtraValueInput::Temporary | ExtraValueInput::Permanent); }
 		bool AllowsDamage() { return GetInputFlags().set & ExtraValueInput::Damage; }
@@ -907,7 +1045,7 @@ namespace AVG
 
 	struct SkillfulData
 	{
-		SkillInfo* GetSkillInfo() { return _skill; }
+		SkillInfo* GetSkillInfo() { return _skill.get(); }
 
 
 		SkillInfo* FetchSkillInfo()
@@ -921,7 +1059,7 @@ namespace AVG
 		SkillInfo& ObtainSkillInfo()
 		{
 			if (!_skill)
-				_skill = new SkillInfo();
+				_skill = std::make_unique<SkillInfo>();
 
 			return *_skill;
 		}
@@ -931,7 +1069,7 @@ namespace AVG
 
 
 
-		SkillInfo* _skill{};//The skill data isn't stored here, just the information for it.
+		std::unique_ptr <SkillInfo> _skill{};//The skill data isn't stored here, just the information for it.
 
 
 	};
@@ -962,22 +1100,22 @@ namespace AVG
 		}
 
 		
-		DefaultInfo* GetDefaultInfo() { return _default; }
-		RecoverInfo* GetRecoverInfo() { return _recovery; }
+		DefaultInfo* GetDefaultInfo() { return _default.get(); }
+		RecoverInfo* GetRecoverInfo() { return _recovery.get(); }
 
 		DefaultInfo* ObtainDefaultInfo()
 		{
 			if (!_default)
-				_default = new DefaultInfo();
+				_default = std::make_unique<DefaultInfo>();
 
-			return _default;
+			return GetDefaultInfo();
 		}
 		RecoverInfo* ObtainRecoverInfo()
 		{
 			if (!_recovery)
-				_recovery = new RecoverInfo();
+				_recovery = std::make_unique<RecoverInfo>();;
 
-			return _recovery;
+			return GetRecoverInfo();
 		}
 
 
@@ -998,13 +1136,15 @@ namespace AVG
 
 			return true;
 		}
+		bool IsImplicit() noexcept { return _default ? _default->type() ==  DefaultInfo::Implicit : false; }
+
 
 		RecoverInfo* FetchRecoverInfo() { if (!this) return nullptr; return GetRecoverInfo(); }
 
 
 
 
-		inline AdaptiveData* adapt() noexcept
+		AdaptiveData* adapt() noexcept
 		{
 			return this;
 		}
@@ -1012,8 +1152,8 @@ namespace AVG
 
 
 		
-		DefaultInfo* _default{};
-		RecoverInfo* _recovery{};
+		std::unique_ptr <DefaultInfo> _default{};
+		std::unique_ptr<RecoverInfo> _recovery{};
 
 		DataID _dataID = -1;
 
@@ -1043,6 +1183,8 @@ namespace AVG
 		SkillInfo* GetSkillInfo() override { return adapt()->GetSkillInfo(); }
 		DefaultInfo* GetDefaultInfo() override { return adapt()->GetDefaultInfo(); }
 		RecoverInfo* GetRecoverInfo() override { return adapt()->GetRecoverInfo(); }
+
+		bool IsImplicit() noexcept override { return adapt()->IsImplicit(); }
 
 		float GetExtraValueDefault(RE::Actor* target) override { return adapt()->GetExtraValueDefault(target); }
 

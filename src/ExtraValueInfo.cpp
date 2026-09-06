@@ -236,36 +236,41 @@ namespace AVG
 
 		auto recovery_data = table["regen"];
 
-		std::string rate;
-		std::string delay;
+		FileView rate;
+		FileView delay;
 		bool fixed = false;
 
 		bool no_rec = false;
 
 		if (recovery_data.is_table() == false) {//!!recovery_data, this is a double negative, not an operator.
-			logger::info("No rec data");
+			logger::debug("No rec data");
 			no_rec = true;
 		}
 		else {
-			rate = recovery_data["rate"].value_or("");
-			delay = recovery_data["delay"].value_or("");
+			rate = recovery_data["rate"];
+			delay = recovery_data["delay"];
 			fixed = recovery_data["fixed"].value_or(false);
-
-			logger::info("Rec data rate: {}, delay: {}", rate, delay);
-			no_rec = rate == "";
+			no_rec = !IsViewFormula(rate);
 		}
 
 		if (!no_rec)
 		{
 			auto recover_info = ObtainRecoverInfo();
+			
 			//recover_info->recoveryDelay = ValueFormula::Create(delay, is_legacy ? legacy : avg);//, "ActorValueGenerator::Commons");
 			//recover_info->recoveryRate = ValueFormula::Create(rate, is_legacy ? legacy : avg);
-			recover_info->delay.SetValue(ValueFormula::Create(delay, is_legacy ? legacy : avg));
-			recover_info->rate.SetValue(ValueFormula::Create(rate, is_legacy ? legacy : avg));
-		}
 
-		if (auto* rec = GetRecoverInfo(); rec && fixed) {
-			rec->flags |= RecoverInfo::Fixed;
+			//recover_info->delay.SetValue(ValueFormula::Create(delay, is_legacy ? legacy : avg));
+			//recover_info->rate.SetValue(ValueFormula::Create(rate, is_legacy ? legacy : avg));
+			
+			if (IsViewFormula(delay) == true) 
+				recover_info->delay.LoadFromFile(delay, is_legacy);
+			
+			if (fixed) 
+				recover_info->flags |= RecoverInfo::Fixed;
+
+			recover_info->rate.LoadFromFile(rate, is_legacy);
+
 		}
 
 
@@ -277,16 +282,15 @@ namespace AVG
 			}
 
 			auto& default_table = *query;
+			
 
-			std::string update_formula = default_table["formula"].value_or("");
 
-			if (update_formula != "" && update_formula != "0")
+
+			if (auto formula = default_table["formula"]; IsViewFormula(formula) == true)
 			{
 				auto* default_info = ObtainDefaultInfo();
 
-				//default_info->defaultFunction = ValueFormula::Create(update_formula, is_legacy ? legacy : avg);
-				default_info->data.SetValue(ValueFormula::Create(update_formula, is_legacy ? legacy : avg));
-
+				default_info->data.LoadFromFile(formula, is_legacy);
 
 				std::string default_type = default_table["type"].value_or("Implicit");
 
@@ -303,7 +307,6 @@ namespace AVG
 					break;
 				}
 			}
-
 		}
 	}
 
@@ -495,8 +498,8 @@ namespace AVG
 				auto& get_table = *get_info.as_table();
 
 				get_strings[ActorValueModifier::kTotal] = get_table["base"].value_or("");
-				get_strings[ActorValueModifier::kPermanent] = get_table["permanent"].value_or("");
-				get_strings[ActorValueModifier::kTemporary] = get_table["temporary"].value_or("");
+				get_strings[ActorValueModifier::kPermanent] = get_table["permanent"].value_or(get_table["modifier"].value_or(""));
+				get_strings[ActorValueModifier::kTemporary] = get_table["temporary"].value_or(get_table["modifier"].value_or(""));
 				get_strings[ActorValueModifier::kDamage] = get_table["damage"].value_or("");
 
 			}

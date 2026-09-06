@@ -36,7 +36,7 @@ namespace AVG
 		RE::VMTypeID form_Type = static_cast<RE::VMTypeID>(object->GetFormType());
 
 		
-		const auto handle = vm->GetHandlePolicy().GetHandleForObject(static_cast<RE::VMTypeID>(form_Type), object);
+		const auto handle = vm->GetVMRuntimeData().handlePolicy.GetHandleForObject(static_cast<RE::VMTypeID>(form_Type), object);
 
 		if (handle){// && vm->handlePolicy.EmptyHandle() != handle) {
 			vm->SendAndRelayEvent(handle, &event_name, event_args, nullptr);
@@ -560,12 +560,19 @@ namespace AVG
 			if (_valueData.size() <= id) {
 				logger::critical("id given was larger than valueData's size. id: {}, size: {}, initialized: {}", id, _valueData.size(), initialized);
 			}
+
+
+			auto& value = _valueData.at(id);
 			//Here, if info is loaded an update will be performed if it's on constant update.
-			duo<float> result = _valueData.at(id).GetValue(modifiers);
+			duo<float> result = value.GetValue(modifiers);
 			
 			if (isnan(result.first) == true) {
 				info = info ? info : ExtraValueInfo::GetValueInfoByData(id);
 				result.first = info->GetExtraValueDefault(owner);
+
+				if (info->IsImplicit() == true) {
+					value.SetValue(result.first);
+				}
 			}
 
 			return result.first + result.second;
